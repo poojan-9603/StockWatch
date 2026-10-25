@@ -7,6 +7,7 @@ Usage: python -m pipeline.sec OUT_DIR
 """
 import json
 import os
+import re
 import sys
 import time
 import zipfile
@@ -48,19 +49,18 @@ def download(url, path):
 def companies(zip_path):
     """One row per filer that has a SIC code (operating companies; skips people and most funds).
 
-    Returns (companies, bad): bad lists zip entries that aren't valid JSON, with their sizes.
+    Reads only the CIKnnnnnnnnnn.json company files (the zip also holds a placeholder.txt). An unreadable
+    company file raises: it would silently drop a company.
     """
-    rows, bad = [], []
+    rows = []
     with zipfile.ZipFile(zip_path) as z:
-        for info in z.infolist():
-            name = info.filename
-            if "-submissions-" in name:  # older-filing pages; only their date range is needed, read below
+        for name in z.namelist():
+            if not re.fullmatch(r"CIK\d{10}\.json", name):  # skips placeholder.txt and older-filing pages
                 continue
             try:
                 d = json.loads(z.read(name))
             except json.JSONDecodeError as e:
-                bad.append({"file": name, "bytes": info.file_size, "error": str(e)})
-                continue
+                raise ValueError(f"unreadable company file {name} in submissions.zip: {e}") from e
             if not d.get("sic"):
                 continue
             recent = d["filings"]["recent"]
@@ -77,7 +77,7 @@ def companies(zip_path):
                 "first_filed": min(dates) if dates else None,
                 "last_filed": max(recent["filingDate"]) if recent["filingDate"] else None,
             })
-    return pd.DataFrame(rows), pd.DataFrame(bad, columns=["file", "bytes", "error"])
+    return pd.DataFrame(rows)
 
 
 def main(out_dir):
@@ -87,15 +87,10 @@ def main(out_dir):
     print("submissions.zip Last-Modified:", download(SUBMISSIONS_URL, zip_path))
     print("company_tickers.json Last-Modified:", download(TICKERS_URL, out / "raw" / "sec" / "company_tickers.json"))
     t = time.monotonic()
-    c, bad = companies(zip_path)
+    c = companies(zip_path)
     (out / "market").mkdir(parents=True, exist_ok=True)
-    (out / "review").mkdir(parents=True, exist_ok=True)
     c.to_parquet(out / "market" / "companies.parquet", index=False)
-    bad.to_csv(out / "review" / "sec_unreadable_files.csv", index=False)
     print(f"companies: {len(c)} filers with a SIC code, parsed in {time.monotonic() - t:.0f}s")
-    if len(bad):
-        # ponytail: logged, not fatal, until we know what these files are (review/sec_unreadable_files.csv)
-        print(f"::warning::{len(bad)} unreadable files in submissions.zip, e.g. {bad.head(5).to_dict('records')}")
 
 
 if __name__ == "__main__":
