@@ -1,7 +1,9 @@
-"""Map every S&P 500 membership spell since 2010 to a CIK.
+"""Map every S&P 500 membership spell since 2010 to the SEC companies (CIKs) behind it, as dated segments.
 
-Accepted automatically, first rule with exactly one answer wins:
-  override    pipeline/ticker_cik_overrides.csv (checked by hand, with a note on the evidence)
+One ticker can sit on top of two SEC companies over time (GOOGL is Google Inc. until Alphabet's first 10-Q on
+2015-10-29), so a spell maps to one or more segments [start, end) with one CIK each.
+
+A spell's latest CIK, first rule with exactly one answer wins:
   wikipedia   open spell whose ticker is on Wikipedia's current list (that list carries CIKs)
   sec_ticker  open spell whose ticker is a current SEC ticker of a company filing during the spell.
               Not used for closed spells: tickers get reused (PARA now belongs to Banzai, not Paramount).
@@ -10,10 +12,18 @@ Accepted automatically, first rule with exactly one answer wins:
   paired      fja spells the ticker differently from Wikipedia (JOY vs JOYG): the name comes from the one
               unmatched Wikipedia event of the same kind within 7 days
   rename      fja ends this spell and starts another the same day, Wikipedia names neither ticker within 30
-              days, the other spell's company was already filing when this one started, and its SEC former
+              days, the other spell's company was already reporting when this one started, and its SEC former
               names show a name change within 60 days of the ticker change (Anthem -> Elevance)
-Every accepted match must also cover the spell: the company files from the spell's start (or 2010) to its end.
-Anything else goes to review/ticker_map_unresolved.csv with a suggestion, and the run fails.
+Then, while the earliest company started reporting after the spell started, its predecessor is prepended: the
+one company sharing its name stem (Exxon Mobil Corp -> ExxonMobil Holdings Corp) whose last 10-K/10-Q falls
+near the successor's first. The changeover is the successor's first 10-K/10-Q.
+
+pipeline/ticker_cik_overrides.csv replaces all of that for a spell (rows: ticker, start of the spell, cik, from
+date of the segment or blank for the spell start, no_sec_reports = yes for companies that never filed 10-K/10-Q
+with the SEC, such as banks that reported to the FDIC, and a note on the evidence).
+
+Every segment must be covered by its company's 10-K/10-Q reports. Anything unresolved or uncovered goes to
+review/ticker_map_unresolved.csv with a suggestion, and the run fails.
 
 Usage: python -m pipeline.ticker_map OUT_DIR  (after pipeline.membership and pipeline.sec)
 """
@@ -21,6 +31,7 @@ import json
 import re
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -28,15 +39,17 @@ import pandas as pd
 from pipeline.membership import wiki_changes, wiki_current
 
 SINCE = "2010-01-01"
-WINDOW = pd.Timedelta(days=7)
+TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 OVERRIDES = Path(__file__).with_name("ticker_cik_overrides.csv")
 SUFFIXES = {"INC", "INCORPORATED", "CORP", "CORPORATION", "CO", "COMPANY", "LTD", "LIMITED", "PLC", "LLC", "LP",
             "NV", "SA", "AG", "THE", "CLASS", "A", "B", "C"}
+STEM_DROP = {"HOLDINGS", "HOLDING", "GROUP", "GLOBAL", "INTERNATIONAL", "INTL", "ENTERPRISES"}
 
 
 def norm(name):
     """'Walt Disney Co/DE/' and 'The Walt Disney Company' both become 'WALT DISNEY'."""
     n = re.sub(r"\(.*?\)|/[A-Z ]{1,4}/?\s*$", " ", str(name).upper())
+    n = re.sub(r"['’]", "", n)  # Kohl's -> KOHLS, as SEC writes it
     n = re.sub(r"[^A-Z0-9 ]", " ", n.replace("&", " AND "))
     words = n.split()
     while words and words[-1] in SUFFIXES:
@@ -46,9 +59,45 @@ def norm(name):
     return " ".join(words)
 
 
+def stem(name):
+    """Looser key for successor companies: 'ExxonMobil Holdings Corp' and 'Exxon Mobil Corp' -> 'EXXONMOBIL'."""
+    words = norm(name).split()
+    while len(words) > 1 and words[-1] in STEM_DROP:
+        words.pop()
+    return "".join(words)
+
+
 def s(x, default):
     """Missing dates arrive as None or NaN."""
-    return x if isinstance(x, str) else default
+    return x if isinstance(x, str) and x else default
+
+
+def shift(date, days):
+    return (pd.Timestamp(date) + pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+def near(date, other, days=7):
+    return abs(pd.Timestamp(date) - pd.Timestamp(other)) <= pd.Timedelta(days=days)
+
+
+def active(c, start, end):
+    """Company c filed anything in [start, end)."""
+    return s(c.first_filed, "9999") < s(end, "9999-12-31") and s(c.last_filed, "") >= start
+
+
+def starts_by(c, date):
+    """c files 10-K/10-Q reports by `date`, or within 150 days of it (a first 10-Q after a spin-off).
+    A spell younger than 150 days passes before the first report exists."""
+    return s(c.first_periodic, "9999") <= shift(date, 150) or shift(date, 150) > TODAY
+
+
+def reports_until(c, date):
+    """c's last 10-K/10-Q is no more than about 13 months before `date` (today for an open segment)."""
+    return s(c.last_periodic, "") >= shift(s(date, TODAY), -400)
+
+
+def covers(c, start, end):
+    return starts_by(c, max(start, SINCE)) and reports_until(c, end)
 
 
 def name_index(companies):
@@ -63,35 +112,34 @@ def name_index(companies):
     return idx
 
 
-def window(date, days):
-    d = pd.Timestamp(date)
-    return (d - pd.Timedelta(days=days)).strftime("%Y-%m-%d"), (d + pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+def stem_index(companies):
+    idx = defaultdict(set)
+    for c in companies.itertuples():
+        for n in [c.name] + [f["name"] for f in json.loads(c.former_names)]:
+            idx[stem(n)].add(c.cik)
+    return idx
 
 
-def active(c, start, end):
-    """Company c filed something in [start, end)."""
-    return s(c.first_filed, "9999") < s(end, "9999-12-31") and s(c.last_filed, "") >= start
-
-
-def covers(c, start, end):
-    """Company c was filing from the spell's start (or 2010) through its end, with room for filing gaps."""
-    lo, _ = window(max(start, SINCE), -90)  # first filing at most 90 days after the start
-    _, hi = window(s(end, s(c.last_filed, "")), -400)  # last filing at most ~13 months before the end
-    return s(c.first_filed, "9999") <= lo and s(c.last_filed, "") >= hi
-
-
-def by_name(name, date, idx, keys):
-    """CIKs named `name` within a year of `date`. If no SEC name matches exactly, SEC names that start with it
-    ('Discover Financial' on Wikipedia, 'DISCOVER FINANCIAL SERVICES' at SEC)."""
+def by_name(name, date, idx, keys, ok=lambda cik: True):
+    """CIKs named `name` within a year of `date` that pass `ok`. If none match exactly, SEC names that start
+    with it ('Discover Financial' on Wikipedia, 'DISCOVER FINANCIAL SERVICES' at SEC)."""
     n = norm(name)
-    lo, hi = window(date, 365)
+    lo, hi = shift(date, -365), shift(date, 365)
+    hits = lambda keys_: {cik for k in keys_ for cik, f, t in idx[k] if f <= hi and t >= lo and ok(cik)}
     # ponytail: linear prefix scan over ~100k names, fine for a few hundred lookups per run
-    matches = [n] if n in idx else [k for k in keys if k.startswith(n + " ")]
-    return {cik for k in matches for cik, f, t in idx[k] if f <= hi and t >= lo}
+    return hits([n] if n in idx else []) or hits([k for k in keys if k.startswith(n + " ")])
 
 
-def near(date, other, days=7):
-    return abs(pd.Timestamp(date) - pd.Timestamp(other)) <= pd.Timedelta(days=days)
+def predecessor(c, co, stems):
+    """The one company c took over from (see module docstring), or None."""
+    first = s(c.first_periodic, None)
+    if not first:
+        return None
+    keys = {stem(c["name"])} | {stem(f["name"]) for f in json.loads(c.former_names)}  # c.name is the row label
+    cands = {k for key in keys for k in stems.get(key, ()) if k != c.cik}
+    cands = [k for k in cands if shift(first, -120) <= s(co.loc[k].last_periodic, "") <= shift(first, 400)
+             and s(co.loc[k].first_periodic, "9999") < first]
+    return co.loc[cands[0]] if len(cands) == 1 else None
 
 
 def wiki_events(changes):
@@ -99,8 +147,8 @@ def wiki_events(changes):
             [("remove", r.removed, r.date, r.removed_name) for r in changes.itertuples() if pd.notna(r.removed)])
 
 
-def resolve(spells, changes, current, companies, overrides):
-    """Returns spells with cik, method, and for unresolved rows suggested_cik and reason."""
+def resolve(spells, changes, current, companies):
+    """Each spell's latest CIK and the rule that found it, or a suggestion and reason."""
     co = companies.set_index("cik", drop=False)
     idx = name_index(companies)
     keys = sorted(idx)
@@ -116,20 +164,17 @@ def resolve(spells, changes, current, companies, overrides):
         k == w[0] and t == w[1] and near(w[2], d) for k, t, d in fja_ev)]
 
     out = []
-    for sp in spells.itertuples():
+    for sp in spells.itertuples(index=False):
         row = {**sp._asdict(), "cik": None, "method": None, "suggested_cik": None, "reason": None}
-        row.pop("Index")
-        o = overrides[(overrides["ticker"] == sp.ticker) & (overrides["start"] == sp.start)]
         held = {c.cik for c in holders.get(sp.ticker, []) if active(c, sp.start, sp.end)}
-        if len(o):
-            row.update(cik=int(o["cik"].iloc[0]), method="override")
-        elif pd.isna(sp.end) and sp.ticker in cur:
+        if pd.isna(sp.end) and sp.ticker in cur:
             row.update(cik=int(cur[sp.ticker]), method="wikipedia")
         elif pd.isna(sp.end) and len(held) == 1:
             row.update(cik=held.pop(), method="sec_ticker")
         else:
-            names = [(n, d) for k, t, d, n in wiki if t == sp.ticker and isinstance(n, str) and
-                     ((k == "add" and near(d, sp.start)) or (k == "remove" and pd.notna(sp.end) and near(d, sp.end)))]
+            names = [(n, d) for k, t, d, n in wiki if t == sp.ticker and isinstance(n, str) and  # dates differ up to ~8 days
+                     ((k == "add" and near(d, sp.start, 14)) or
+                      (k == "remove" and pd.notna(sp.end) and near(d, sp.end, 14)))]
             method = "name"
             if not names:
                 for kind, date in [("add", sp.start), ("remove", sp.end)]:
@@ -139,8 +184,10 @@ def resolve(spells, changes, current, companies, overrides):
                 method = "paired"
             hits = set()
             for n, d in names:  # the company must have been filing within a year of the add or remove
-                lo, hi = window(d, 365)
-                hits |= {h for h in by_name(n, d, idx, keys) if h in co.index and active(co.loc[h], lo, hi)}
+                hits |= by_name(n, d, idx, keys, lambda h, d=d: h in co.index and
+                                active(co.loc[h], shift(d, -365), shift(d, 365)))
+            if len(hits) > 1:  # 'Unum' matches Unum Group and Unum Therapeutics: keep who reported all along
+                hits = {h for h in hits if covers(co.loc[h], sp.start, sp.end)} or hits
             if len(hits) == 1:
                 row.update(cik=hits.pop(), method=method)
             elif len(held) == 1:
@@ -148,13 +195,7 @@ def resolve(spells, changes, current, companies, overrides):
             else:
                 row.update(reason=f"no unique match ({len(hits)} by name, {len(held)} by current ticker)")
         out.append(row)
-    m = pd.DataFrame(out)
-    m = renames(m, wiki, co)
-    for i, r in m[m["cik"].notna()].iterrows():  # every match must cover its spell
-        if not covers(co.loc[int(r["cik"])], r["start"], r["end"]):
-            m.loc[i, ["suggested_cik", "reason", "cik", "method"]] = [
-                r["cik"], f"{r['method']} match, but the company isn't filing across the whole spell", None, None]
-    return m
+    return renames(pd.DataFrame(out), wiki, co)
 
 
 def renames(m, wiki, co):
@@ -178,7 +219,7 @@ def renames(m, wiki, co):
             c = co.loc[int(p["cik"])]
             if not quiet({u["ticker"], p["ticker"]}, u["end"]):
                 continue
-            if s(c.first_filed, "9999") <= max(u["start"], SINCE) and renamed_near(c, u["end"]):
+            if s(c.first_periodic, "9999") <= max(u["start"], SINCE) and renamed_near(c, u["end"]):
                 m.loc[i, ["cik", "method", "suggested_cik", "reason"]] = [p["cik"], "rename", None, None]
                 changed = True
             elif pd.isna(u["suggested_cik"]):
@@ -187,22 +228,50 @@ def renames(m, wiki, co):
     return m
 
 
-def company_spells(mapped):
-    """Merge back-to-back ticker spells of the same CIK (renames) into one membership spell per company."""
-    rows = []
-    for cik, g in mapped.dropna(subset=["cik"]).sort_values("start").groupby("cik"):
-        cur = None
-        for r in g.itertuples():
-            end = None if pd.isna(r.end) else r.end
-            if cur and cur["end"] is not None and r.start <= cur["end"]:
-                cur["end"] = None if end is None else max(cur["end"], end)
-                cur["tickers"] += f",{r.ticker}"
-            else:
-                if cur:
-                    rows.append(cur)
-                cur = {"cik": int(cik), "start": r.start, "end": end, "tickers": r.ticker}
-        rows.append(cur)
-    return pd.DataFrame(rows)
+def segments(m, companies, overrides):
+    """(segments, unresolved): one segment row per stretch of a spell with one CIK."""
+    co = companies.set_index("cik", drop=False)
+    stems = stem_index(companies)
+    new = lambda date: shift(date, 150) > TODAY  # too young to have a first 10-Q yet
+    segs, bad = [], []
+    for r in m.itertuples(index=False):
+        o = overrides[(overrides["ticker"] == r.ticker) & (overrides["start"] == r.start)]
+        if len(o):
+            o = o.assign(f=o["from"].map(lambda x: s(x, r.start))).sort_values("f")
+            chain = [(row.f, int(row.cik) if s(row.cik, None) else None,
+                      "override_no_sec_reports" if s(row.no_sec_reports, "") == "yes" else "override")
+                     for row in o.itertuples()]
+        elif pd.notna(r.cik):
+            chain = [(r.start, int(r.cik), r.method)]
+            while chain[0][1] in co.index and not starts_by(co.loc[chain[0][1]], max(r.start, SINCE)):
+                p = predecessor(co.loc[chain[0][1]], co, stems)
+                if p is None:
+                    break
+                chain[0] = (co.loc[chain[0][1]].first_periodic, chain[0][1], chain[0][2])
+                chain.insert(0, (r.start, int(p.cik), "predecessor"))
+        else:
+            bad.append({**r._asdict()})
+            continue
+        ends = [f for f, _, _ in chain[1:]] + [r.end]
+        rows = [{"ticker": r.ticker, "spell_start": r.start, "start": f, "end": e, "cik": k, "method": meth}
+                for (f, k, meth), e in zip(chain, ends)]
+        uncovered = []
+        for x in rows:
+            if x["method"] == "override_no_sec_reports" or (pd.notna(x["end"]) and x["end"] < SINCE):
+                continue
+            if x["cik"] not in co.index:
+                if not new(x["start"]):
+                    uncovered.append((x, f"CIK {x['cik']} isn't in the SEC companies table"))
+            elif not covers(co.loc[x["cik"]], x["start"], x["end"]):
+                c = co.loc[x["cik"]]
+                uncovered.append((x, f"{x['method']} match {c['name']} doesn't report across {x['start']} to "
+                                     f"{s(x['end'], 'today')} (10-K/10-Q {c.first_periodic} to {c.last_periodic})"))
+        if uncovered:
+            x, why = uncovered[0]
+            bad.append({**r._asdict(), "suggested_cik": x["cik"], "reason": why})
+        else:
+            segs += rows
+    return pd.DataFrame(segs), pd.DataFrame(bad)
 
 
 def main(out_dir):
@@ -214,23 +283,25 @@ def main(out_dir):
     current = wiki_current((raw / "wiki_current.html").read_text(encoding="utf-8"))
     companies = pd.read_parquet(out / "market" / "companies.parquet")
     overrides = pd.read_csv(OVERRIDES, dtype=str, comment="#") if OVERRIDES.exists() else \
-        pd.DataFrame(columns=["ticker", "start", "cik"])
+        pd.DataFrame(columns=["ticker", "start", "cik", "from", "no_sec_reports", "note"])
 
-    mapped = resolve(spells, changes, current, companies, overrides)
-    print(mapped["method"].value_counts(dropna=False).to_string())
+    m = resolve(spells, changes, current, companies)
+    segs, unresolved = segments(m, companies, overrides)
+    print(segs.drop_duplicates(["ticker", "spell_start"])["method"].value_counts().to_string())
+    print(f"{len(segs)} segments for {segs[['ticker', 'spell_start']].drop_duplicates().shape[0]} spells, "
+          f"{(segs['method'] == 'predecessor').sum()} predecessor segments, {len(unresolved)} spells unresolved")
     (out / "review").mkdir(parents=True, exist_ok=True)
     names = companies.set_index("cik")["name"]
-    unresolved = mapped[mapped["cik"].isna()].copy()
-    unresolved["suggested_name"] = unresolved["suggested_cik"].map(lambda c: names.get(int(c)) if pd.notna(c) else None)
+    if len(unresolved):
+        unresolved["suggested_name"] = unresolved["suggested_cik"].map(
+            lambda c: names.get(int(c)) if pd.notna(c) else None)
     unresolved.to_csv(out / "review" / "ticker_map_unresolved.csv", index=False)
-    mapped.to_parquet(out / "market" / "ticker_map.parquet", index=False)
+    segs.to_parquet(out / "market" / "ticker_map.parquet", index=False)
 
-    cs = company_spells(mapped)
-    ours, theirs = set(cs.loc[cs["end"].isna(), "cik"]), set(current["cik"])
-    print(f"{len(cs)} company spells, {len(ours)} open; current CIKs ours only {sorted(ours - theirs)}, "
-          f"Wikipedia only {sorted(theirs - ours)}")
+    ours, theirs = set(segs.loc[segs["end"].isna(), "cik"]), set(current["cik"])
+    print(f"current CIKs ours only {sorted(ours - theirs)}, Wikipedia only {sorted(theirs - ours)}")
     if len(unresolved) or ours != theirs:
-        sys.exit(f"{len(unresolved)} spells without a CIK, current-member CIK match: {ours == theirs}")
+        sys.exit(f"{len(unresolved)} spells unresolved, current-member CIK match: {ours == theirs}")
 
 
 if __name__ == "__main__":

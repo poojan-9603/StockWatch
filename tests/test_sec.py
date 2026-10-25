@@ -18,10 +18,11 @@ def test_companies_reads_filing_and_periodic_ranges_including_older_pages(tmp_pa
             filing(1, "CO", "3571", ["2020-01-02", "2015-05-01", "2010-05-01"], ["4", "10-Q", "8-K"], ["1996-03-01"])))
         z.writestr("CIK0000000001-submissions-001.json", json.dumps(
             {"filingDate": ["1997-02-01", "1996-03-01"], "form": ["10-K", "S-1"]}))
-        z.writestr("CIK0000000002.json", json.dumps(filing(2, "PERSON", "", ["2020-01-02"], ["4"])))  # no SIC
+        z.writestr("CIK0000000002.json", json.dumps(filing(2, "PERSON", "", ["2020-01-02"], ["4"])))  # dropped
+        z.writestr("CIK0000000004.json", json.dumps(filing(4, "EX-CO NOW FUND", "", ["2016-01-02"], ["10-K"])))
         z.writestr("placeholder.txt", "not a company")  # SEC ships one of these: skipped
     c = companies(zp)
-    assert list(c["cik"]) == [1]
+    assert sorted(c["cik"]) == [1, 4]  # no SIC but filed a 10-K (Yahoo after it became Altaba): kept
     row = c.iloc[0]
     assert (row["first_filed"], row["last_filed"]) == ("1996-03-01", "2020-01-02")
     assert (row["first_periodic"], row["last_periodic"]) == ("1997-02-01", "2015-05-01")

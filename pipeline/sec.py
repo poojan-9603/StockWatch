@@ -56,7 +56,7 @@ def periodic_range(filings):
 
 
 def companies(zip_path):
-    """One row per filer that has a SIC code (operating companies; skips people and most funds).
+    """One row per filer with a SIC code or 10-K/10-Q reports (operating companies; skips people and most funds).
 
     Reads the CIKnnnnnnnnnn.json company files plus their CIKnnnnnnnnnn-submissions-NNN.json pages of older
     filings (needed for the first periodic report of companies with over 1,000 filings). Skips anything
@@ -79,9 +79,9 @@ def companies(zip_path):
                     continue
             except (json.JSONDecodeError, KeyError) as e:
                 raise ValueError(f"unreadable company file {name} in submissions.zip: {e!r}") from e
-            if not d.get("sic"):
-                continue
             recent = d["filings"]["recent"]
+            if not d.get("sic") and not periodic_range(recent)[0] and not d["filings"].get("files"):
+                continue  # people and funds; a filer that lost its SIC but filed 10-Ks (Yahoo) is kept below
             dates = recent["filingDate"] + [p["filingFrom"] for p in d["filings"].get("files", [])]
             lo, hi = periodic_range(recent)
             if lo:
@@ -102,7 +102,7 @@ def companies(zip_path):
     c = pd.DataFrame(rows)
     c["first_periodic"] = c["cik"].map(lambda k: periodic.get(k, (None, None))[0])
     c["last_periodic"] = c["cik"].map(lambda k: periodic.get(k, (None, None))[1])
-    return c
+    return c[(c["sic"] != "") | c["first_periodic"].notna()].reset_index(drop=True)
 
 
 def main(out_dir):
@@ -115,7 +115,7 @@ def main(out_dir):
     c = companies(zip_path)
     (out / "market").mkdir(parents=True, exist_ok=True)
     c.to_parquet(out / "market" / "companies.parquet", index=False)
-    print(f"companies: {len(c)} filers with a SIC code, parsed in {time.monotonic() - t:.0f}s")
+    print(f"companies: {len(c)} filers with a SIC code or 10-K/10-Q reports, parsed in {time.monotonic() - t:.0f}s")
 
 
 if __name__ == "__main__":
