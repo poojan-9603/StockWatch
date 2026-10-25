@@ -169,11 +169,10 @@ Source: [GitHub Actions billing](https://docs.github.com/en/billing/concepts/pro
 - **`StockWatchBackups` repo is PUBLIC.** The plan says the backup repo is private, and it will hold trades and holdings. Make it private before anything is written to it.
 - **gh CLI account:** resolved. `poojan-9603` is now the active gh account, and `StockWatch` is confirmed private.
 
-## R2 check workflow (task 3): NOT YET PASSED
+## R2 check workflow (task 3): PASS
 
-Run [40233146564](https://github.com/poojan-9603/StockWatch/actions/runs/40233146564) on 2026-10-25 failed at the first check: `secret for R2_ACCOUNT_ID is missing or empty`. `poojan-9603/StockWatch` has **no Actions secrets** at the repo or environment level, and no variables. The fail-loud path works. R2 read/write is still unverified.
-
-To pass: add repo secrets `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (Settings > Secrets and variables > Actions), then rerun the workflow.
-
-First real timing: the whole job took 11 seconds, which bills as 1 minute.
+- Run [40233146564](https://github.com/poojan-9603/StockWatch/actions/runs/40233146564) (2026-10-25) failed with `secret for R2_ACCOUNT_ID is missing or empty`, because the repo had no secrets yet. That confirmed the fail-loud path.
+- After the four secrets were added, run [40233924222](https://github.com/poojan-9603/StockWatch/actions/runs/40233924222) (2026-10-25) **passed**. It wrote `logs/m0-r2-check/<run-id>.txt`, read it back byte-identical, and deleted it. Write took 1.4 s, read 0.8 s.
+- The run log shows all four secrets as `***`. No values leaked.
+- First real timing: the whole job took about 11 seconds, which bills as 1 minute.
 - **yfinance from GitHub's data-center IPs** is sometimes rate-limited or blocked by Yahoo. It worked from this machine. It's untested from Actions until M1, and it's another reason the Tiingo fallback matters.
