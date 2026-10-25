@@ -1,0 +1,55 @@
+# M1 backfill. Manual, safe to rerun: every step rewrites its outputs from scratch.
+# Raw downloads go to R2 even if a later step fails; market/ files only after every step passes.
+name: backfill
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Check secrets
+        run: |
+          for v in SEC_USER_AGENT R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Membership spells
+        run: python -m pipeline.membership out
+      - name: SEC submissions and companies table
+        run: python -m pipeline.sec out
+      - name: Save raw downloads to R2
+        if: always()
+        run: |
+          [ -d out/raw ] || exit 0
+          aws s3 sync out/raw "s3://$BUCKET/raw" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - name: Save market files to R2
+        run: aws s3 sync out/market "s3://$BUCKET/market" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backfill-outputs
+          path: |
+            out/market/
+            out/review/
+          retention-days: 7
+          if-no-files-found: ignore

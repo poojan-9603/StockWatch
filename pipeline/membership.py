@@ -1,8 +1,8 @@
 """S&P 500 membership spells, by ticker, from fja05680/sp500 snapshots, extended with Wikipedia's newer changes.
 
 Spells are [start, end): start is the first snapshot date a ticker is listed, end is the first date it isn't
-(None while still a member). Tickers are as each source spells them; mapping to CIK, and the by-company
-reconciliation of fja against Wikipedia, come in M1 step 3.
+(None while still a member). Tickers are as each source spells them; pipeline.ticker_map maps them to CIK and
+reconciles fja against Wikipedia by company.
 
 Usage: python -m pipeline.membership OUT_DIR
 """
@@ -55,7 +55,9 @@ def wiki_changes(html):
     out = pd.DataFrame({
         "date": pd.to_datetime(t.iloc[:, 0], errors="coerce", format="mixed"),
         "added": t.iloc[:, 1].map(clean_ticker),
+        "added_name": t.iloc[:, 2],
         "removed": t.iloc[:, 3].map(clean_ticker),
+        "removed_name": t.iloc[:, 4],
     })
     if out["date"].isna().any():
         raise ValueError(f"{int(out['date'].isna().sum())} Wikipedia change rows have unreadable dates")
@@ -64,8 +66,9 @@ def wiki_changes(html):
 
 
 def wiki_current(html):
+    """Today's members: ticker, name, CIK."""
     t = next(t for t in pd.read_html(io.StringIO(html)) if "Symbol" in t.columns)
-    return {clean_ticker(s) for s in t["Symbol"]}
+    return pd.DataFrame({"ticker": t["Symbol"].map(clean_ticker), "name": t["Security"], "cik": t["CIK"].astype(int)})
 
 
 def extend(spells, changes, after):
@@ -96,14 +99,14 @@ def main(out_dir):
     spells, fja_last = fja_spells(raw["fja.csv"])
     spells = extend(spells, wiki_changes(raw["wiki_changes.html"]), after=fja_last)
     ours = set(spells.loc[spells["end"].isna(), "ticker"])
-    theirs = wiki_current(raw["wiki_current.html"])
+    theirs = set(wiki_current(raw["wiki_current.html"])["ticker"])
 
-    spells.to_parquet(out / "membership.parquet", index=False)
+    (out / "market").mkdir(parents=True, exist_ok=True)
+    spells.to_parquet(out / "market" / "membership.parquet", index=False)
     print(f"fja last snapshot {fja_last}, {len(spells)} spells, {len(ours)} current members")
-    print(f"current members missing vs Wikipedia list: {sorted(theirs - ours)}")
-    print(f"current members extra vs Wikipedia list: {sorted(ours - theirs)}")
-    if ours != theirs:
-        sys.exit("current membership does not match Wikipedia's list")
+    # By ticker this can differ on renames (PSKY is now SKYD). pipeline.ticker_map enforces the match by CIK.
+    print(f"ticker-level diff vs Wikipedia's current list: ours only {sorted(ours - theirs)}, "
+          f"Wikipedia only {sorted(theirs - ours)}")
 
 
 if __name__ == "__main__":
