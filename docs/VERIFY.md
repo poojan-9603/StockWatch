@@ -5,8 +5,17 @@ Checked 2026-10-25. Each item: result, evidence, sources. **PASS** = confirmed. 
 | # | Item | Result |
 |---|---|---|
 | 1 | Tiingo free plan keeps delisted tickers and their history | PARTIAL, with a catch |
-| 2 | Finnhub free tier includes the earnings calendar | PASS (limited), but **Finnhub price fallback FAILS** |
-| 3 | Source for splits and dividends history | Proposal, needs approval |
+| 2 | Finnhub free tier includes the earnings calendar | PASS (limited). Finnhub price fallback FAILED, replaced by Tiingo (decided) |
+| 3 | Source for splits and dividends history | Decided: Tiingo for history, yfinance for daily |
+
+## Decisions
+
+| Date | Decision | Why |
+|---|---|---|
+| 2026-10-25 | **Tiingo EOD replaces Finnhub as the daily price fallback** and is the second source for the cross-source spot check. The spot check draws from a **fixed pool of about 150 symbols, rotated monthly**, instead of 20 to 30 random stocks a day. | Finnhub daily candles are premium-only (item 2). Random daily picks would use about 660 unique symbols a month, over Tiingo's 500-symbol free cap, which the dead-company backfill also needs. |
+| 2026-10-25 | **Splits and dividends: Tiingo `divCash`/`splitFactor` for history (including dead companies), yfinance `actions` for the daily update on live names.** Each cross-checks the other where both exist. | Finnhub splits and dividends are premium. yfinance returns nothing for delisted names. Tiingo returns both fields in the same response as backfill prices (item 3). |
+
+Budget note for M1: Tiingo's 500 unique symbols a month are shared by the dead-company backfill and the spot-check pool. Run the backfill first, then start the pool.
 | 4 | EDGAR sector codes location, nightly bulk-file rebuild | PASS |
 | 5 | Stronger model's current price for the judge role | PASS |
 | 6 | Whether Cloudflare Access needs an owned domain | PASS (no domain needed) |
@@ -65,11 +74,11 @@ The earnings calendar covers upcoming dates fine. One month of history is enough
 
 **FAIL: the plan lists "yfinance, Finnhub fallback" for daily prices. Finnhub daily candles are premium-only, so that fallback doesn't exist on the free tier.**
 
-**Proposed alternative:** use Tiingo EOD as the second price source, both as the fallback and for the daily 20 to 30 stock cross-source spot check. **Catch:** 30 *random* stocks a day is about 660 unique symbols a month, over Tiingo's 500 cap, and the cap is also needed for the dead-company backfill. Fix: draw the spot check from a fixed pool of about 150 symbols that rotates monthly, and run the dead-company backfill first. **Needs your decision.**
+**Proposed alternative:** use Tiingo EOD as the second price source, both as the fallback and for the daily 20 to 30 stock cross-source spot check. **Catch:** 30 *random* stocks a day is about 660 unique symbols a month, over Tiingo's 500 cap, and the cap is also needed for the dead-company backfill. Fix: draw the spot check from a fixed pool of about 150 symbols that rotates monthly, and run the dead-company backfill first. **Approved 2026-10-25** (see Decisions).
 
 Source: [Finnhub earnings calendar docs](https://finnhub.io/docs/api/earnings-calendar) (rendered from the spec above)
 
-## 3. Splits and dividends history: proposal
+## 3. Splits and dividends history: decided
 
 Tested:
 
@@ -77,7 +86,7 @@ Tested:
 - **Finnhub** splits and dividends are premium (item 2).
 - **Tiingo EOD** returns `divCash` (dividend on its ex-date) and `splitFactor` on every daily row, raw and adjusted prices side by side. It covers dead companies (item 1). Not yet called (needs key).
 
-**Proposal:** Tiingo `divCash`/`splitFactor` is the source for history, including dead names, since it comes in the same response as the backfill prices. yfinance `actions` handles the daily update for live names. Each one cross-checks the other where both exist. Rule 9 of the plan (raw prices plus our own adjustment math) works with both. **Needs your approval.**
+**Proposal:** Tiingo `divCash`/`splitFactor` is the source for history, including dead names, since it comes in the same response as the backfill prices. yfinance `actions` handles the daily update for live names. Each one cross-checks the other where both exist. Rule 9 of the plan (raw prices plus our own adjustment math) works with both. **Approved 2026-10-25** (see Decisions).
 
 Sources: [Tiingo EOD docs](https://www.tiingo.com/documentation/end-of-day), local test with yfinance 1.7.0
 
