@@ -1,0 +1,8 @@
+# S&P 500 membership spells missing from fja, added after review of docs/review/membership_disagreements.csv (approved 2026-10-25).
+# Read by pipeline/ticker_map.py. One row per CIK segment, as in ticker_cik_overrides.csv, plus the spell's end (blank = still a member).
+ticker,start,end,cik,from,no_sec_reports,link,note
+ACE,2010-07-14,2016-01-19,896159,,,,"ACE Ltd joined the index (Wikipedia row 2010-07-14, listed under today's name Chubb). fja relabels ACE's history as CB and loses it. ACE continues as CB from 2016-01-19, when it bought Chubb Corp. SEC: Chubb Ltd, formerly ACE LTD"
+TYC,2010-08-26,2016-09-06,833444,,,,"Tyco International joined, replacing Smith International (Wikipedia row 2010-08-26), and left 2016-09-06 when it merged with Johnson Controls and took the JCI ticker (Wikipedia). fja relabels Tyco's history as JCI and loses it. SEC: Johnson Controls International plc, formerly TYCO INTERNATIONAL"
+ACT,1999-04-12,2015-03-23,884629,,,,"Watson Pharmaceuticals, later Actavis (tickers WPI, then ACT). Only Wikipedia shows the start (row 1999-04-12, under the later name Actavis). fja relabels its history as AGN and loses it. Continues as AGN from 2015-03-23, when it bought Allergan. SEC: Allergan Finance LLC, formerly Actavis, Inc. and WATSON PHARMACEUTICALS INC"
+ACT,1999-04-12,2015-03-23,1578845,2013-10-31,,successor,"Actavis plc after its 2013 redomicile, from its first 10-K/10-Q. SEC: Allergan plc, formerly Actavis plc"
+MBC,2022-12-15,2022-12-19,1941365,,,,"MasterBrand, a Fortune Brands spin-off, was in the index 4 days (Wikipedia rows 2022-12-15 and 2022-12-19); fja misses it. SEC: MasterBrand, Inc."

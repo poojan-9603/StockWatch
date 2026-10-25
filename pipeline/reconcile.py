@@ -1,11 +1,13 @@
-"""Compare fja's S&P 500 membership with Wikipedia's change table, by company rather than by ticker.
+"""Compare our S&P 500 membership (fja plus pipeline/membership_fixes.csv) with Wikipedia's change table, by
+company rather than by ticker.
 
 A company here is a CIK plus its successors (Google Inc. and Alphabet are one company; 21st Century Fox and
 Fox Corp, which took its tickers, are two). Its membership
 is the union of its spells' dates, with gaps of 3 days or less closed (a ticker change ends one spell and starts
 the next). Each start or end since 2010 is an event. Wikipedia events are mapped to the same companies, by the
 ticker's spells near that date or else by company name. An event with no same-kind match within 7 days on the
-other side is a disagreement, written to review/membership_disagreements.csv for review by hand. A Wikipedia
+other side is a disagreement, written to review/membership_disagreements.csv. Every disagreement must already be
+in pipeline/membership_reviewed.csv (checked by hand, with a suggestion and reason), or the run fails. A Wikipedia
 row for a company that is a member the week before and after is marked wikipedia_same_company: usually a share
 class or ticker change, but it can also be a name that matched the wrong company (Wikipedia's 2010 'Chubb' add
 is ACE under today's name), so those rows are listed too.
@@ -19,6 +21,9 @@ import pandas as pd
 
 from pipeline.membership import wiki_changes
 from pipeline.ticker_map import SINCE, active, by_name, name_index, near, shift, wiki_events
+
+
+REVIEWED = Path(__file__).with_name("membership_reviewed.csv")
 
 
 def key(r):
@@ -104,7 +109,7 @@ def compare(segs, changes, companies):
     for e, kind, date, tickers in ours:
         if not any(e2 == e and k2 == kind and near(d2, date) for e2, k2, d2, _, _ in theirs):
             other = [d2 for e2, k2, d2, _, _ in theirs if e2 == e and k2 == kind]
-            rows.append({"side": "fja_only", "kind": kind, "date": date, "tickers": ",".join(sorted(tickers)),
+            rows.append({"side": "ours_only", "kind": kind, "date": date, "tickers": ",".join(sorted(tickers)),
                          "company": names.get(e) if isinstance(e, int) else e, "entity": e,
                          "wikipedia_same_kind_dates": ",".join(other)})
     for e, kind, date, ticker, name in theirs:
@@ -131,9 +136,21 @@ def main(out_dir):
     d, n_ours, n_theirs, same = compare(segs, changes, companies)
     (out / "review").mkdir(parents=True, exist_ok=True)
     d.to_csv(out / "review" / "membership_disagreements.csv", index=False)
-    print(f"company events since {SINCE}: fja {n_ours}, Wikipedia {n_theirs}; "
+    print(f"company events since {SINCE}: ours {n_ours}, Wikipedia {n_theirs}; "
           f"{same} unmatched Wikipedia rows are for a company that stays in (likely share class or ticker changes)")
     print(d.groupby(["period", "side"]).size().to_string())
+    new = unreviewed(d, pd.read_csv(REVIEWED, dtype=str, comment="#"))
+    if len(new):
+        print(new[["date", "side", "kind", "tickers", "company"]].to_string(index=False))
+        sys.exit(f"{len(new)} disagreements not in {REVIEWED.name}: review them and add a row each")
+
+
+def unreviewed(d, reviewed):
+    """Disagreements whose (date, kind, tickers) aren't in the reviewed list. Side is ignored: a fix moves a
+    row from one side to the other."""
+    k = lambda f: set(zip(f["date"], f["kind"], f["tickers"].astype(str)))
+    seen = k(reviewed)
+    return d[[x not in seen for x in zip(d["date"], d["kind"], d["tickers"].astype(str))]]
 
 
 if __name__ == "__main__":

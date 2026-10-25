@@ -45,6 +45,7 @@ from pipeline.membership import wiki_changes, wiki_current
 SINCE = "2010-01-01"
 TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 OVERRIDES = Path(__file__).with_name("ticker_cik_overrides.csv")
+FIXES = Path(__file__).with_name("membership_fixes.csv")
 SUFFIXES = {"INC", "INCORPORATED", "CORP", "CORPORATION", "CO", "COMPANY", "LTD", "LIMITED", "PLC", "LLC", "LP",
             "NV", "SA", "AG", "THE", "CLASS", "A", "B", "C"}
 STEM_DROP = {"HOLDINGS", "HOLDING", "GROUP", "GLOBAL", "INTERNATIONAL", "INTL", "ENTERPRISES"}
@@ -292,6 +293,11 @@ def main(out_dir):
     companies = pd.read_parquet(out / "market" / "companies.parquet")
     overrides = pd.read_csv(OVERRIDES, dtype=str, comment="#") if OVERRIDES.exists() else \
         pd.DataFrame(columns=["ticker", "start", "cik", "from", "no_sec_reports", "link", "note"])
+    # Spells fja is missing (reviewed by hand): new spells whose CIK segments are given like overrides.
+    fixes = pd.read_csv(FIXES, dtype=str, comment="#")
+    spells = pd.concat([spells, fixes[["ticker", "start", "end"]].drop_duplicates().assign(source="fix")],
+                       ignore_index=True)
+    overrides = pd.concat([overrides, fixes.drop(columns="end")], ignore_index=True)
 
     m = resolve(spells, changes, current, companies)
     segs, unresolved = segments(m, companies, overrides)

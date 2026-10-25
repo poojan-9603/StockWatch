@@ -1,6 +1,6 @@
 import pandas as pd
 
-from pipeline.reconcile import entities, memberships
+from pipeline.reconcile import entities, memberships, unreviewed
 
 
 def seg(ticker, spell_start, start, end, cik, link=None):
@@ -30,3 +30,10 @@ def test_memberships_split_at_new_company_and_merge_renames():
     assert [(s, e) for s, e, _ in mem[ent[3]]] == [("2004-12-20", "2019-03-19")]
     assert [(s, e) for s, e, _ in mem[ent[4]]] == [("2019-03-19", None)]
     assert [(s, e, t) for s, e, t in mem[ent[5]]] == [("2003-03-31", None, {"SYMC", "NLOK"})]
+
+
+def test_unreviewed_flags_new_disagreements_regardless_of_side():
+    d = pd.DataFrame([{"date": "2012-05-01", "side": "ours_only", "kind": "add", "tickers": "PSX"},
+                      {"date": "2030-01-02", "side": "ours_only", "kind": "add", "tickers": "NEW"}])
+    reviewed = pd.DataFrame([{"date": "2012-05-01", "side": "fja_only", "kind": "add", "tickers": "PSX"}])
+    assert list(unreviewed(d, reviewed)["tickers"]) == ["NEW"]

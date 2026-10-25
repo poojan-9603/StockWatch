@@ -1,0 +1,74 @@
+# fja-plus-fixes vs Wikipedia disagreements reviewed and approved 2026-10-25 (see docs/M1.md). pipeline/reconcile.py fails on any disagreement not listed here.
+date,side,kind,tickers,company,period,suggestion,confidence,why
+2010-01-27,ours_only,remove,JAVA,"SUN MICROSYSTEMS, INC.",tuning 2010-2019,keep fja,high,Oracle closed its Sun deal 2010-01-27; Wikipedia's table lists nothing
+2010-01-29,ours_only,add,NRG,"NRG ENERGY, INC.",tuning 2010-2019,keep fja,medium,Likely Sun's replacement; Wikipedia's table lists nothing
+2010-02-08,ours_only,add,URBN,URBAN OUTFITTERS INC,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-02-08,ours_only,remove,ACS,AFFILIATED COMPUTER SERVICES INC,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-02-16,ours_only,add,BRK.B,BERKSHIRE HATHAWAY INC,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-02-16,ours_only,remove,BNI,"BURLINGTON NORTHERN SANTA FE, LLC",tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-03-01,ours_only,add,"DISCA,DISCK,WBD","Warner Bros. Discovery, Inc.",tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-03-01,ours_only,remove,PBG,PEPSI BOTTLING GROUP INC,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-03-15,ours_only,add,OKE,ONEOK INC /NEW/,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-03-15,ours_only,remove,BDK,BLACK & DECKER CORP,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2010-07-14,ours_only,add,"ACE,CB",Chubb Ltd,tuning 2010-2019,applied: ACE added,medium,ACE's spell from membership_fixes.csv; Wikipedia's same-day row says 'Chubb' and maps to Chubb Corp by name
+2010-07-14,wikipedia_same_company,add,CB,Chubb,tuning 2010-2019,applied: ACE added,medium,Wikipedia's 'Chubb' add is ACE under today's name; matches the fixed ACE spell's date
+2011-01-18,ours_only,add,NE,Noble Corp,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2011-01-18,ours_only,remove,QLGC,QLOGIC CORP,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2011-06-01,wikipedia_unmapped,add,ANR,Alpha Natural Resources,tuning 2010-2019,no change,high,"Alpha Natural Resources; fja uses the later bankruptcy ticker ANRZQ, dates 1 day apart"
+2011-06-02,ours_only,add,ANRZQ,"Alpha Natural Resources, Inc.",tuning 2010-2019,no change,high,Alpha Natural Resources; Wikipedia's ANR row is 1 day earlier
+2012-04-23,wikipedia_only,add,PSX,Phillips 66,tuning 2010-2019,YOUR CALL: use fja 2012-05-01,medium,Phillips 66 began regular trading 2012-05-01 after the ConocoPhillips spin-off; 04-23 looks like the announcement
+2012-04-23,wikipedia_same_company,remove,SVU,Supervalu,tuning 2010-2019,YOUR CALL: use fja 2012-05-01,medium,Same event as fja's 2012-05-01 removal
+2012-05-01,ours_only,add,PSX,Phillips 66,tuning 2010-2019,YOUR CALL: use fja 2012-05-01,medium,Same event as Wikipedia's 2012-04-23 row
+2012-05-01,ours_only,remove,SVU,SUPERVALU INC,tuning 2010-2019,YOUR CALL: use fja 2012-05-01,medium,Supervalu made way for Phillips 66; Wikipedia says 04-23
+2012-05-17,wikipedia_only,add,KMI,Kinder Morgan,tuning 2010-2019,YOUR CALL: use fja 2012-05-25,medium,Kinder Morgan closed the El Paso deal 2012-05-24; 05-17 looks like the announcement
+2012-05-17,wikipedia_same_company,remove,EP,El Paso Corporation,tuning 2010-2019,YOUR CALL: use fja 2012-05-25,medium,Same event as fja's 2012-05-25 removal
+2012-05-25,ours_only,add,KMI,"KINDER MORGAN, INC.",tuning 2010-2019,YOUR CALL: use fja 2012-05-25,medium,Same event as Wikipedia's 2012-05-17 row
+2012-05-25,ours_only,remove,EP,EL PASO LLC,tuning 2010-2019,YOUR CALL: use fja 2012-05-25,medium,El Paso removed when Kinder Morgan closed the deal
+2012-10-02,ours_only,remove,ANRZQ,"Alpha Natural Resources, Inc.",tuning 2010-2019,no change,high,"Alpha Natural Resources removal, same day as Wikipedia's ANR row"
+2012-10-02,wikipedia_same_company,add,MDLZ,Mondelez,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2012-10-02,wikipedia_same_company,remove,KFT,Kraft Foods,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2012-10-02,wikipedia_unmapped,remove,ANR,Alpha Natural Resources,tuning 2010-2019,no change,high,Same day as fja's ANRZQ removal
+2014-04-03,wikipedia_same_company,add,GOOGL,Google,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2014-08-06,wikipedia_same_company,add,DISCK,Discovery Communications,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2015-07-02,ours_only,add,WRK,WRKCo Inc.,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2015-07-02,ours_only,remove,MWV,MEADWESTVACO Corp,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2015-09-18,wikipedia_same_company,add,CMCSK,Comcast Class K Special,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2015-09-18,wikipedia_same_company,add,FOX,Twenty-First Century Fox Class B,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2015-09-18,wikipedia_same_company,add,NWS,News Corporation Class B,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2015-11-10,ours_only,add,FCPT,"Four Corners Property Trust, Inc.",tuning 2010-2019,keep fja,medium,"Four Corners, a Darden spin-off, held in the index for a week (usual spin-off handling)"
+2015-11-17,ours_only,remove,FCPT,"Four Corners Property Trust, Inc.",tuning 2010-2019,keep fja,medium,End of Four Corners' one-week stay
+2015-12-15,wikipedia_same_company,remove,CMCSK,Comcast Series K,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2016-01-19,ours_only,remove,CB,CHUBB CORP,tuning 2010-2019,keep fja,high,Chubb Corp removed after ACE bought it
+2016-01-19,wikipedia_same_company,remove,ACE,Chubb,tuning 2010-2019,no change,high,"With ACE's spell added, this row maps to ACE, which stays in as CB; Chubb Corp's removal is the CB row"
+2016-04-08,wikipedia_same_company,add,UA,Under Armour (Class C),tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2016-09-06,ours_only,remove,JCI,JOHNSON CONTROLS INC,tuning 2010-2019,keep fja,high,Johnson Controls Inc. removed when it merged into Tyco
+2016-09-06,wikipedia_same_company,remove,TYC,Tyco International,tuning 2010-2019,no change,high,"With Tyco's spell added, this row maps to Tyco, which stays in as JCI; Johnson Controls Inc.'s removal is the JCI row"
+2016-11-01,wikipedia_same_company,add,ARNC,Arconic,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2016-11-01,wikipedia_unmapped,remove,AA,Alcoa,tuning 2010-2019,no change,high,Alcoa Inc. renamed itself Arconic (ARNC) and stayed; the new Alcoa Corp spin-off wasn't added
+2017-07-07,wikipedia_same_company,add,BKR,Baker Hughes,tuning 2010-2019,no change,medium,"Baker Hughes merged with GE Oil & Gas into a new SEC company; we treat it as one company continuing, Wikipedia as a swap"
+2017-07-07,wikipedia_same_company,remove,BHI,Baker Hughes,tuning 2010-2019,no change,medium,Same as the BKR row
+2017-08-29,ours_only,add,IQV,IQVIA HOLDINGS INC.,tuning 2010-2019,no change,high,QuintilesIMS joined as Q; fja uses the later ticker IQV
+2017-08-29,wikipedia_unmapped,add,Q,QuintilesIMS,tuning 2010-2019,no change,high,Same as fja's IQV add
+2017-11-15,wikipedia_same_company,add,IQV,IQVIA,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2017-11-15,wikipedia_unmapped,remove,Q,QuintilesIMS,tuning 2010-2019,no change,high,Ticker Q changed to IQV
+2018-10-31,ours_only,remove,PX,LINDE INC,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2018-11-06,ours_only,add,LIN,LINDE PLC,tuning 2010-2019,keep fja,high,Real index change that Wikipedia's table doesn't list
+2019-06-03,wikipedia_same_company,add,DD,DuPont,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2019-06-03,wikipedia_same_company,remove,DWDP,DuPont,tuning 2010-2019,no change,high,Share class or ticker change; the company stays in the index
+2019-06-07,wikipedia_only,add,BMS,Bemis,tuning 2010-2019,YOUR CALL: probably ignore,low,A 4-day Bemis stay in Wikipedia around Amcor's purchase; fja removed Bemis in 2014
+2019-06-11,wikipedia_only,remove,BMS,Bemis,tuning 2010-2019,YOUR CALL: probably ignore,low,End of the same 4-day stay
+2020-04-01,wikipedia_same_company,add,HWM,Howmet Aerospace,test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2020-04-01,wikipedia_same_company,remove,ARNC,Arconic,test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2020-11-17,ours_only,add,VTRS,Viatris Inc,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
+2020-11-17,ours_only,remove,MYL,MYLAN INC.,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
+2022-01-10,wikipedia_same_company,add,WTW,Willis Towers Watson,test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2022-01-10,wikipedia_same_company,remove,WLTW,Willis Towers Watson,test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2022-04-11,wikipedia_same_company,add,WBD,Warner Bros. Discovery,test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2022-04-11,wikipedia_same_company,remove,DISCA,"Discovery, Inc.",test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2022-04-11,wikipedia_same_company,remove,DISCK,"Discovery, Inc.",test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2024-02-01,wikipedia_same_company,add,DAY,Dayforce,test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2024-02-01,wikipedia_same_company,remove,CDAY,Ceridian,test/live 2020+,no change,high,Share class or ticker change; the company stays in the index
+2024-07-08,ours_only,add,SW,Smurfit Westrock plc,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
+2024-07-08,ours_only,remove,WRK,WRKCo Inc.,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
+2025-08-08,ours_only,add,PSKY,Skydance Corp,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
+2025-08-08,ours_only,remove,"CBS,PARA,VIAC",Paramount Global,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
