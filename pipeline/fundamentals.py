@@ -122,7 +122,8 @@ def main(out_dir):
     (out / "market" / "fundamentals").mkdir(parents=True, exist_ok=True)
     t = time.monotonic()
     n_co, n_rows, cover, no_facts = extract(zip_path, scope, tuning_ciks, out / "market" / "fundamentals" / "facts.parquet")
-    print(f"facts: {n_rows} rows for {n_co} of {len(scope)} companies in scope, {time.monotonic() - t:.0f}s")
+    mb = (out / "market" / "fundamentals" / "facts.parquet").stat().st_size / 1e6
+    print(f"facts: {n_rows} rows for {n_co} of {len(scope)} companies in scope, {mb:.0f} MB, {time.monotonic() - t:.0f}s")
 
     names = companies.set_index("cik")["name"]
     wl = {(tx, tag) for tx, tags in TAGS.items() for tag in tags}
