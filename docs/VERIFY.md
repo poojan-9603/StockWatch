@@ -4,7 +4,7 @@ Checked 2026-10-25. Each item: result, evidence, sources. **PASS** = confirmed. 
 
 | # | Item | Result |
 |---|---|---|
-| 1 | Tiingo free plan keeps delisted tickers and their history | PARTIAL, with a catch |
+| 1 | Tiingo free plan keeps delisted tickers and their history | PASS, with a catch (failed names live under OTC tickers) |
 | 2 | Finnhub free tier includes the earnings calendar | PASS (limited). Finnhub price fallback FAILED, replaced by Tiingo (decided) |
 | 3 | Source for splits and dividends history | Decided: Tiingo for history, yfinance for daily |
 
@@ -24,7 +24,7 @@ Budget note for M1: Tiingo's 500 unique symbols a month are shared by the dead-c
 
 ---
 
-## 1. Tiingo: delisted tickers and history: PARTIAL
+## 1. Tiingo: delisted tickers and history: PASS
 
 **Test made:** downloaded Tiingo's public ticker list (`supported_tickers.zip`, no key needed, 109,127 rows, columns `ticker, exchange, assetType, priceCurrency, startDate, endDate`) and looked up known dead S&P 500 names.
 
@@ -51,7 +51,21 @@ Looking up `SIVB`, `FRC`, or `BBBY` directly finds nothing. Tickers are also reu
 
 **What this means:** the data exists, but the backfill can't just loop over old S&P 500 tickers. Failed names need a mapping step (old ticker → Tiingo ticker), probably by company name plus date overlap. Tiingo's list has no CIK, so this is manual-ish work for the failures. That's M1 work, not a blocker.
 
-**Not yet tested:** an actual price-history call for a dead ticker (needs a Tiingo API key). One call each for `TWTR` and `SIVBQ` would close this item.
+**Price-history test (PASS):** workflow `tiingo-check`, run [40235703998](https://github.com/poojan-9603/StockWatch/actions/runs/40235703998) on 2026-10-25, free plan key, token masked in the log:
+
+| Ticker | Name | Rows | First | Last | Last close | Dividend rows | Split rows |
+|---|---|---|---|---|---|---|---|
+| TWTR (acquired) | Twitter Inc | 2,260 | 2013-11-07 | 2022-10-28 | 53.70 | 0 | 0 |
+| SIVBQ (failed) | SVB Financial Group | 8,897 | 1990-03-26 | 2026-10-23 | 0.006 | 4 | 5 |
+
+- TWTR has its full IPO-to-buyout history. About 9 years at roughly 252 trading days a year is about 2,270, so 2,260 fits. No dividends is correct, since Twitter never paid one.
+- SIVBQ has one continuous series from the 1990 listing, through the March 2023 failure, into OTC trading under the new ticker. The 5 split rows include three 2-for-1 splits (1990, 1998, 2000) and two 1.05 factors (1991, 1992), which look like 5% stock dividends.
+
+Notes for M1:
+
+- **SIVBQ has fewer rows than a full calendar would give** (8,897 against roughly 9,200 for 36.6 years). Probably trading halts and thin OTC days. The completeness check will show where the gaps are. Not investigated yet.
+- **Tiingo's end date isn't the delisting date for failed companies.** SIVBQ still trades OTC at fractions of a cent. The backtest's failure penalty (about 30% below the last price) must use the last exchange-listed price, taken from the S&P removal or exchange delisting date, not Tiingo's last row.
+- The 4 SIVBQ dividend rows weren't checked against an outside source.
 
 **Free plan limits** (pricing page): 500 unique symbols/month, 50 requests/hour, 1,000 requests/day, 1 GB/month, 30+ years of price history, license "Internal Use Only" (personal use, no sharing). The 500-symbol cap is shared with any other Tiingo use (see item 2).
 
@@ -84,7 +98,7 @@ Tested:
 
 - **yfinance 1.7.0** `Ticker.actions` works for listed names (AAPL: 97 dividend/split events, NVDA: 62, latest 2026-09-10). It returns **empty for delisted names** (TWTR, SIVB: "possibly delisted").
 - **Finnhub** splits and dividends are premium (item 2).
-- **Tiingo EOD** returns `divCash` (dividend on its ex-date) and `splitFactor` on every daily row, raw and adjusted prices side by side. It covers dead companies (item 1). Not yet called (needs key).
+- **Tiingo EOD** returns `divCash` (dividend on its ex-date) and `splitFactor` on every daily row, raw and adjusted prices side by side. It covers dead companies (item 1). Confirmed in the item 1 test: SIVBQ returned 4 dividend rows and 5 split rows.
 
 **Proposal:** Tiingo `divCash`/`splitFactor` is the source for history, including dead names, since it comes in the same response as the backfill prices. yfinance `actions` handles the daily update for live names. Each one cross-checks the other where both exist. Rule 9 of the plan (raw prices plus our own adjustment math) works with both. **Approved 2026-10-25** (see Decisions).
 
