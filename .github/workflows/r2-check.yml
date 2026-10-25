@@ -1,0 +1,36 @@
+# M0: confirm the R2 secrets can write, read back, and delete one object. Run by hand from the Actions tab.
+name: r2-check
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  r2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # Newer AWS CLI checksum headers that R2 can reject; only send them when required.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Write, read back, delete a test object
+        run: |
+          set -euo pipefail
+          for v in R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
+          done
+          r2() { aws s3api "$@" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --bucket "$BUCKET" > /dev/null; }
+          key="logs/m0-r2-check/${GITHUB_RUN_ID}.txt"
+          echo "r2 check run ${GITHUB_RUN_ID} at $(date -u +%FT%TZ)" > sent.txt
+          time r2 put-object --key "$key" --body sent.txt
+          time r2 get-object --key "$key" got.txt
+          cmp sent.txt got.txt
+          r2 delete-object --key "$key"
+          echo "R2 write, read back, and delete all OK"
