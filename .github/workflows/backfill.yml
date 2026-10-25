@@ -37,6 +37,10 @@ jobs:
         run: python -m pipeline.membership out
       - name: SEC submissions and companies table
         run: python -m pipeline.sec out
+      - name: Ticker to CIK map (fails if any spell is unresolved)
+        run: python -m pipeline.ticker_map out
+      - name: fja against Wikipedia, by company (writes the review list)
+        run: python -m pipeline.reconcile out
       - name: Save raw downloads to R2
         if: always()
         run: |

@@ -20,7 +20,11 @@ near the successor's first. The changeover is the successor's first 10-K/10-Q.
 
 pipeline/ticker_cik_overrides.csv replaces all of that for a spell (rows: ticker, start of the spell, cik, from
 date of the segment or blank for the spell start, no_sec_reports = yes for companies that never filed 10-K/10-Q
-with the SEC, such as banks that reported to the FDIC, and a note on the evidence).
+with the SEC, such as banks that reported to the FDIC, link, and a note on the evidence).
+
+Each later segment's link says how it follows the one before: successor (the same business under a new SEC
+entity, shares converting: Google Inc. -> Alphabet) or new_company (another business took the ticker: Fox Corp
+took FOXA from 21st Century Fox in 2019). Overrides default to successor.
 
 Every segment must be covered by its company's 10-K/10-Q reports. Anything unresolved or uncovered goes to
 review/ticker_map_unresolved.csv with a suggestion, and the run fails.
@@ -86,9 +90,8 @@ def active(c, start, end):
 
 
 def starts_by(c, date):
-    """c files 10-K/10-Q reports by `date`, or within 150 days of it (a first 10-Q after a spin-off).
-    A spell younger than 150 days passes before the first report exists."""
-    return s(c.first_periodic, "9999") <= shift(date, 150) or shift(date, 150) > TODAY
+    """c files 10-K/10-Q reports by `date`, or within 150 days of it (a first 10-Q after a spin-off)."""
+    return s(c.first_periodic, "9999") <= shift(date, 150)
 
 
 def reports_until(c, date):
@@ -97,6 +100,9 @@ def reports_until(c, date):
 
 
 def covers(c, start, end):
+    """c's 10-K/10-Q reports span the segment. A segment under 150 days old passes before any report exists."""
+    if shift(max(start, SINCE), 150) > TODAY and not s(c.first_periodic, None):
+        return True
     return starts_by(c, max(start, SINCE)) and reports_until(c, end)
 
 
@@ -236,25 +242,27 @@ def segments(m, companies, overrides):
     segs, bad = [], []
     for r in m.itertuples(index=False):
         o = overrides[(overrides["ticker"] == r.ticker) & (overrides["start"] == r.start)]
+        # chain: (from, cik, method, link to the previous segment: successor or new_company)
         if len(o):
             o = o.assign(f=o["from"].map(lambda x: s(x, r.start))).sort_values("f")
             chain = [(row.f, int(row.cik) if s(row.cik, None) else None,
-                      "override_no_sec_reports" if s(row.no_sec_reports, "") == "yes" else "override")
-                     for row in o.itertuples()]
+                      "override_no_sec_reports" if s(row.no_sec_reports, "") == "yes" else "override",
+                      None if i == 0 else s(row.link, "successor"))
+                     for i, row in enumerate(o.itertuples())]
         elif pd.notna(r.cik):
-            chain = [(r.start, int(r.cik), r.method)]
+            chain = [(r.start, int(r.cik), r.method, None)]
             while chain[0][1] in co.index and not starts_by(co.loc[chain[0][1]], max(r.start, SINCE)):
                 p = predecessor(co.loc[chain[0][1]], co, stems)
                 if p is None:
                     break
-                chain[0] = (co.loc[chain[0][1]].first_periodic, chain[0][1], chain[0][2])
-                chain.insert(0, (r.start, int(p.cik), "predecessor"))
+                chain[0] = (co.loc[chain[0][1]].first_periodic, chain[0][1], chain[0][2], "successor")
+                chain.insert(0, (r.start, int(p.cik), "predecessor", None))
         else:
             bad.append({**r._asdict()})
             continue
-        ends = [f for f, _, _ in chain[1:]] + [r.end]
-        rows = [{"ticker": r.ticker, "spell_start": r.start, "start": f, "end": e, "cik": k, "method": meth}
-                for (f, k, meth), e in zip(chain, ends)]
+        ends = [f for f, *_ in chain[1:]] + [r.end]
+        rows = [{"ticker": r.ticker, "spell_start": r.start, "start": f, "end": e, "cik": k, "method": meth,
+                 "link": link} for (f, k, meth, link), e in zip(chain, ends)]
         uncovered = []
         for x in rows:
             if x["method"] == "override_no_sec_reports" or (pd.notna(x["end"]) and x["end"] < SINCE):
@@ -283,7 +291,7 @@ def main(out_dir):
     current = wiki_current((raw / "wiki_current.html").read_text(encoding="utf-8"))
     companies = pd.read_parquet(out / "market" / "companies.parquet")
     overrides = pd.read_csv(OVERRIDES, dtype=str, comment="#") if OVERRIDES.exists() else \
-        pd.DataFrame(columns=["ticker", "start", "cik", "from", "no_sec_reports", "note"])
+        pd.DataFrame(columns=["ticker", "start", "cik", "from", "no_sec_reports", "link", "note"])
 
     m = resolve(spells, changes, current, companies)
     segs, unresolved = segments(m, companies, overrides)
