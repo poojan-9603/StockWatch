@@ -1,0 +1,38 @@
+# M0: confirm Tiingo's free plan returns full daily history for an acquired (TWTR) and a failed (SIVBQ) company.
+# Run by hand from the Actions tab. Uses 2 of the 500 monthly Tiingo symbols.
+name: tiingo-check
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  tiingo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+    steps:
+      - name: Fetch metadata and full daily history
+        run: |
+          set -euo pipefail
+          [ -n "$TIINGO_API_KEY" ] || { echo "::error::TIINGO_API_KEY secret is missing or empty"; exit 1; }
+          for t in TWTR SIVBQ; do
+            # Token goes in a header, never the URL.
+            curl -sfS -H "Authorization: Token $TIINGO_API_KEY" "https://api.tiingo.com/tiingo/daily/$t" -o "meta_$t.json"
+            curl -sfS -H "Authorization: Token $TIINGO_API_KEY" "https://api.tiingo.com/tiingo/daily/$t/prices?startDate=1990-01-01" -o "prices_$t.json"
+            python3 - "$t" <<'EOF'
+          import json, sys
+          t = sys.argv[1]
+          m = json.load(open(f"meta_{t}.json"))
+          p = json.load(open(f"prices_{t}.json"))
+          if not p:
+              sys.exit(f"::error::{t}: no price rows returned")
+          divs = [r for r in p if r["divCash"]]
+          splits = [(r["date"][:10], r["splitFactor"]) for r in p if r["splitFactor"] != 1]
+          print(f"{t}: name={m['name']!r}, meta dates {m['startDate']} to {m['endDate']}")
+          print(f"{t}: {len(p)} rows, {p[0]['date'][:10]} to {p[-1]['date'][:10]}, last close {p[-1]['close']}")
+          print(f"{t}: {len(divs)} dividend rows, splits {splits}")
+          EOF
+          done
