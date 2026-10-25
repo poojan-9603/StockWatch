@@ -167,5 +167,13 @@ Source: [GitHub Actions billing](https://docs.github.com/en/billing/concepts/pro
 ## Found along the way (not on the list)
 
 - **`StockWatchBackups` repo is PUBLIC.** The plan says the backup repo is private, and it will hold trades and holdings. Make it private before anything is written to it.
-- **gh CLI on this machine is logged in as `poojan-coda`, not `poojan-9603`.** It can't see `poojan-9603/StockWatch` (so that repo is probably private, which is good), can't read secret names, and can't push. Either log in as `poojan-9603` or push yourself.
+- **gh CLI account:** resolved. `poojan-9603` is now the active gh account, and `StockWatch` is confirmed private.
+
+## R2 check workflow (task 3): NOT YET PASSED
+
+Run [40233146564](https://github.com/poojan-9603/StockWatch/actions/runs/40233146564) on 2026-10-25 failed at the first check: `secret for R2_ACCOUNT_ID is missing or empty`. `poojan-9603/StockWatch` has **no Actions secrets** at the repo or environment level, and no variables. The fail-loud path works. R2 read/write is still unverified.
+
+To pass: add repo secrets `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (Settings > Secrets and variables > Actions), then rerun the workflow.
+
+First real timing: the whole job took 11 seconds, which bills as 1 minute.
 - **yfinance from GitHub's data-center IPs** is sometimes rate-limited or blocked by Yahoo. It worked from this machine. It's untested from Actions until M1, and it's another reason the Tiingo fallback matters.
