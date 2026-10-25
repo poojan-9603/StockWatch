@@ -30,14 +30,14 @@ Advice only. It never places trades. I'm not a financial advisor and neither is 
 
 | Data | Feeds | Source |
 |---|---|---|
-| Daily prices and volume | Momentum, volatility, sizing, correlation | yfinance, Finnhub fallback |
+| Daily prices and volume | Momentum, volatility, sizing, correlation | yfinance, Tiingo fallback |
 | Fundamentals | Quality, value, earnings surprise, issuance, asset growth | SEC EDGAR bulk files |
 | 8-K filings | Red flags, catalysts | SEC EDGAR |
 | News headlines | News door, agent checks, briefing | Finnhub free |
-| Earnings dates | Timing, briefing | Finnhub (verify free) |
+| Earnings dates | Timing, briefing | Finnhub (free: 1 month history plus upcoming) |
 | Macro (rates, volatility) | Market mood filter | FRED |
 | Sector codes | Sector-relative ranks, sector cap | EDGAR |
-| Splits and dividends | Correct returns and holdings | To verify |
+| Splits and dividends | Correct returns and holdings | Tiingo for history (including dead companies), yfinance for daily |
 | My trades | Holdings | Entered by me |
 | Dead-company prices | Backtest without survivorship bias | Tiingo free |
 
@@ -70,7 +70,7 @@ Insider buying (Form 4) is a v2 candidate, tested before use. Social sentiment a
 - Sanity: price above zero, high at or above low, close within range
 - Moves over about 40% must be explained by a split, an 8-K, or a second source, or get flagged
 - Staleness: repeated closes flagged
-- Daily cross-source spot check on 20 to 30 random stocks
+- Daily cross-source spot check (yfinance against Tiingo) on 20 to 30 stocks drawn from a fixed pool of about 150, rotated monthly to stay under Tiingo's 500-symbol monthly cap
 - Accounting identity: assets equal liabilities plus equity
 - A test that fails if any calculation uses a number before its filing date
 
