@@ -39,8 +39,10 @@ jobs:
         run: python -m pipeline.sec out
       - name: Ticker to CIK map (fails if any spell is unresolved)
         run: python -m pipeline.ticker_map out
-      - name: fja against Wikipedia, by company (writes the review list)
+      - name: fja against Wikipedia, by company (fails on unreviewed disagreements)
         run: python -m pipeline.reconcile out
+      - name: XBRL fundamentals, point in time
+        run: python -m pipeline.fundamentals out
       - name: Save raw downloads to R2
         if: always()
         run: |
@@ -55,5 +57,6 @@ jobs:
           path: |
             out/market/
             out/review/
+            !out/market/fundamentals/
           retention-days: 7
           if-no-files-found: ignore

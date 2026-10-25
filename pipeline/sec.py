@@ -3,7 +3,7 @@
 Every request carries the SEC_USER_AGENT secret and stays under SEC's 10 requests a second.
 
 Usage: python -m pipeline.sec OUT_DIR
-  writes OUT_DIR/raw/sec/{submissions.zip, company_tickers.json} and OUT_DIR/market/companies.parquet
+  writes OUT_DIR/raw/sec/{submissions.zip, company_tickers.json} and OUT_DIR/market/{companies,filings_8k}.parquet
 """
 import json
 import os
@@ -55,15 +55,28 @@ def periodic_range(filings):
     return (min(dates), max(dates)) if dates else (None, None)
 
 
+EIGHT_K_SINCE = "2009-01-01"
+
+
+def eight_ks(cik, filings):
+    """8-K and 8-K/A rows since 2009 from a column-wise filings block. acceptance is the exact time SEC took the
+    filing: one accepted after the close is news for the next trading day."""
+    cols = zip(filings["accessionNumber"], filings["form"], filings["filingDate"], filings["reportDate"],
+               filings["acceptanceDateTime"], filings["items"])
+    return [{"cik": cik, "accession": a, "form": f, "filed": d, "report_date": rd, "acceptance": ac, "items": it}
+            for a, f, d, rd, ac, it in cols if f in ("8-K", "8-K/A") and d >= EIGHT_K_SINCE]
+
+
 def companies(zip_path):
-    """One row per filer with a SIC code or 10-K/10-Q reports (operating companies; skips people and most funds).
+    """(companies, 8-Ks): one row per filer with a SIC code or 10-K/10-Q reports (operating companies; skips
+    people and most funds), and those filers' 8-Ks since 2009.
 
     Reads the CIKnnnnnnnnnn.json company files plus their CIKnnnnnnnnnn-submissions-NNN.json pages of older
-    filings (needed for the first periodic report of companies with over 1,000 filings). Skips anything
-    else (the zip holds a placeholder.txt). An unreadable company file or page raises: it would silently
-    drop or shorten a company.
+    filings (needed for the first periodic report and older 8-Ks of companies with over 1,000 filings). Skips
+    anything else (the zip holds a placeholder.txt). An unreadable company file or page raises: it would
+    silently drop or shorten a company.
     """
-    rows, periodic = [], {}
+    rows, periodic, eights = [], {}, []
     with zipfile.ZipFile(zip_path) as z:
         for name in z.namelist():
             m = re.fullmatch(r"CIK(\d{10})(-submissions-\d+)?\.json", name)
@@ -76,10 +89,12 @@ def companies(zip_path):
                     if lo:
                         old = periodic.get(int(m.group(1)), (lo, hi))
                         periodic[int(m.group(1))] = (min(old[0], lo), max(old[1], hi))
+                    eights += eight_ks(int(m.group(1)), d)
                     continue
+                recent = d["filings"]["recent"]
+                eights += eight_ks(int(d["cik"]), recent)
             except (json.JSONDecodeError, KeyError) as e:
                 raise ValueError(f"unreadable company file {name} in submissions.zip: {e!r}") from e
-            recent = d["filings"]["recent"]
             if not d.get("sic") and not periodic_range(recent)[0] and not d["filings"].get("files"):
                 continue  # people and funds; a filer that lost its SIC but filed 10-Ks (Yahoo) is kept below
             dates = recent["filingDate"] + [p["filingFrom"] for p in d["filings"].get("files", [])]
@@ -102,7 +117,10 @@ def companies(zip_path):
     c = pd.DataFrame(rows)
     c["first_periodic"] = c["cik"].map(lambda k: periodic.get(k, (None, None))[0])
     c["last_periodic"] = c["cik"].map(lambda k: periodic.get(k, (None, None))[1])
-    return c[(c["sic"] != "") | c["first_periodic"].notna()].reset_index(drop=True)
+    c = c[(c["sic"] != "") | c["first_periodic"].notna()].reset_index(drop=True)
+    e = pd.DataFrame(eights, columns=["cik", "accession", "form", "filed", "report_date", "acceptance", "items"])
+    e = e[e["cik"].isin(set(c["cik"]))].drop_duplicates("accession").sort_values(["cik", "filed"], ignore_index=True)
+    return c, e
 
 
 def main(out_dir):
@@ -112,10 +130,12 @@ def main(out_dir):
     print("submissions.zip Last-Modified:", download(SUBMISSIONS_URL, zip_path))
     print("company_tickers.json Last-Modified:", download(TICKERS_URL, out / "raw" / "sec" / "company_tickers.json"))
     t = time.monotonic()
-    c = companies(zip_path)
+    c, e = companies(zip_path)
     (out / "market").mkdir(parents=True, exist_ok=True)
     c.to_parquet(out / "market" / "companies.parquet", index=False)
-    print(f"companies: {len(c)} filers with a SIC code or 10-K/10-Q reports, parsed in {time.monotonic() - t:.0f}s")
+    e.to_parquet(out / "market" / "filings_8k.parquet", index=False)
+    print(f"companies: {len(c)} filers with a SIC code or 10-K/10-Q reports, {len(e)} 8-Ks since "
+          f"{EIGHT_K_SINCE}, parsed in {time.monotonic() - t:.0f}s")
 
 
 if __name__ == "__main__":
