@@ -46,25 +46,47 @@ def download(url, path):
     return r.headers.get("Last-Modified")
 
 
+PERIODIC = {"10-K", "10-K405", "10-KSB", "10-KT", "10-Q", "10-QSB", "10-QT", "20-F", "40-F"}
+
+
+def periodic_range(filings):
+    """(first, last) filing date of 10-K/10-Q style reports in a column-wise filings block."""
+    dates = [d for d, f in zip(filings["filingDate"], filings["form"]) if f in PERIODIC]
+    return (min(dates), max(dates)) if dates else (None, None)
+
+
 def companies(zip_path):
     """One row per filer that has a SIC code (operating companies; skips people and most funds).
 
-    Reads only the CIKnnnnnnnnnn.json company files (the zip also holds a placeholder.txt). An unreadable
-    company file raises: it would silently drop a company.
+    Reads the CIKnnnnnnnnnn.json company files plus their CIKnnnnnnnnnn-submissions-NNN.json pages of older
+    filings (needed for the first periodic report of companies with over 1,000 filings). Skips anything
+    else (the zip holds a placeholder.txt). An unreadable company file or page raises: it would silently
+    drop or shorten a company.
     """
-    rows = []
+    rows, periodic = [], {}
     with zipfile.ZipFile(zip_path) as z:
         for name in z.namelist():
-            if not re.fullmatch(r"CIK\d{10}\.json", name):  # skips placeholder.txt and older-filing pages
+            m = re.fullmatch(r"CIK(\d{10})(-submissions-\d+)?\.json", name)
+            if not m:
                 continue
             try:
                 d = json.loads(z.read(name))
-            except json.JSONDecodeError as e:
-                raise ValueError(f"unreadable company file {name} in submissions.zip: {e}") from e
+                if m.group(2):  # page of older filings: same columns as filings.recent
+                    lo, hi = periodic_range(d)
+                    if lo:
+                        old = periodic.get(int(m.group(1)), (lo, hi))
+                        periodic[int(m.group(1))] = (min(old[0], lo), max(old[1], hi))
+                    continue
+            except (json.JSONDecodeError, KeyError) as e:
+                raise ValueError(f"unreadable company file {name} in submissions.zip: {e!r}") from e
             if not d.get("sic"):
                 continue
             recent = d["filings"]["recent"]
             dates = recent["filingDate"] + [p["filingFrom"] for p in d["filings"].get("files", [])]
+            lo, hi = periodic_range(recent)
+            if lo:
+                old = periodic.get(int(d["cik"]), (lo, hi))
+                periodic[int(d["cik"])] = (min(old[0], lo), max(old[1], hi))
             rows.append({
                 "cik": int(d["cik"]),
                 "name": d["name"],
@@ -77,7 +99,10 @@ def companies(zip_path):
                 "first_filed": min(dates) if dates else None,
                 "last_filed": max(recent["filingDate"]) if recent["filingDate"] else None,
             })
-    return pd.DataFrame(rows)
+    c = pd.DataFrame(rows)
+    c["first_periodic"] = c["cik"].map(lambda k: periodic.get(k, (None, None))[0])
+    c["last_periodic"] = c["cik"].map(lambda k: periodic.get(k, (None, None))[1])
+    return c
 
 
 def main(out_dir):

@@ -4,33 +4,37 @@ import zipfile
 from pipeline.sec import companies
 
 
-def filing(cik, name, sic, dates, pages=()):
+def filing(cik, name, sic, dates, forms, pages=()):
     return {"cik": str(cik), "name": name, "sic": sic, "sicDescription": "x", "ownerOrg": "o",
             "tickers": ["T"], "exchanges": ["NYSE"], "formerNames": [{"name": "OLD", "from": "2001", "to": "2005"}],
-            "filings": {"recent": {"filingDate": dates, "form": ["10-K"] * len(dates)},
+            "filings": {"recent": {"filingDate": dates, "form": forms},
                         "files": [{"filingFrom": p} for p in pages]}}
 
 
-def test_companies_keeps_sic_filers_and_reads_filing_range(tmp_path):
+def test_companies_reads_filing_and_periodic_ranges_including_older_pages(tmp_path):
     zp = tmp_path / "s.zip"
     with zipfile.ZipFile(zp, "w") as z:
-        z.writestr("CIK0000000001.json", json.dumps(filing(1, "CO", "3571", ["2020-01-02", "2010-05-01"], ["1996-03-01"])))
-        z.writestr("CIK0000000002.json", json.dumps(filing(2, "PERSON", "", ["2020-01-02"])))  # no SIC: dropped
-        z.writestr("CIK0000000001-submissions-001.json", "{}")  # paging file: skipped
+        z.writestr("CIK0000000001.json", json.dumps(
+            filing(1, "CO", "3571", ["2020-01-02", "2015-05-01", "2010-05-01"], ["4", "10-Q", "8-K"], ["1996-03-01"])))
+        z.writestr("CIK0000000001-submissions-001.json", json.dumps(
+            {"filingDate": ["1997-02-01", "1996-03-01"], "form": ["10-K", "S-1"]}))
+        z.writestr("CIK0000000002.json", json.dumps(filing(2, "PERSON", "", ["2020-01-02"], ["4"])))  # no SIC
         z.writestr("placeholder.txt", "not a company")  # SEC ships one of these: skipped
     c = companies(zp)
     assert list(c["cik"]) == [1]
     row = c.iloc[0]
     assert (row["first_filed"], row["last_filed"]) == ("1996-03-01", "2020-01-02")
+    assert (row["first_periodic"], row["last_periodic"]) == ("1997-02-01", "2015-05-01")
     assert json.loads(row["former_names"])[0]["name"] == "OLD"
 
 
-def test_unreadable_company_file_raises(tmp_path):
-    zp = tmp_path / "s.zip"
-    with zipfile.ZipFile(zp, "w") as z:
-        z.writestr("CIK0000000003.json", "")
-    try:
-        companies(zp)
-    except ValueError:
-        return
-    raise AssertionError("expected ValueError")
+def test_unreadable_company_file_or_page_raises(tmp_path):
+    for name, body in [("CIK0000000003.json", ""), ("CIK0000000003-submissions-001.json", "{}")]:
+        zp = tmp_path / "s.zip"
+        with zipfile.ZipFile(zp, "w") as z:
+            z.writestr(name, body)
+        try:
+            companies(zp)
+        except ValueError:
+            continue
+        raise AssertionError(f"expected ValueError for {name}")
