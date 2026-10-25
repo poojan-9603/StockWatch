@@ -1,0 +1,53 @@
+# M1 step 1: can a GitHub runner pull daily history from Yahoo via yfinance, and are its closes raw or split-adjusted?
+# Run by hand from the Actions tab. Fetches data only, computes no returns or signals.
+name: yfinance-check
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  yfinance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -q yfinance==1.7.0
+      - name: Fetch 20 tickers from 2010, then one batch call
+        shell: python
+        run: |
+          import time, yfinance as yf
+          # Large caps, small/mid caps, recent renames (BNY, FISV, PSKY), a class share (BRK-B),
+          # split-heavy names (NVDA, TSLA), the benchmark ETF, and one dead ticker (TWTR) that should come back empty.
+          tickers = ["AAPL", "MSFT", "NVDA", "META", "BRK-B", "GOOGL", "JPM", "XOM", "TSLA", "KO",
+                     "CROX", "SMCI", "ELF", "CELH", "AXON", "BNY", "FISV", "PSKY", "SPY", "TWTR"]
+          ok, empty, errors = 0, [], []
+          t0 = time.time()
+          for t in tickers:
+              s = time.time()
+              try:
+                  h = yf.Ticker(t).history(start="2010-01-01", auto_adjust=False, actions=True)
+              except Exception as e:
+                  errors.append(f"{t}: {type(e).__name__}: {e}")
+                  continue
+              if h.empty:
+                  empty.append(t)
+                  continue
+              ok += 1
+              nulls = int(h[["Open", "High", "Low", "Close", "Volume"]].isna().sum().sum())
+              print(f"{t}: {len(h)} rows, {h.index[0].date()} to {h.index[-1].date()}, "
+                    f"{int((h['Dividends'] > 0).sum())} dividends, {int((h['Stock Splits'] > 0).sum())} splits, "
+                    f"{nulls} nulls, {time.time() - s:.1f}s")
+          print(f"\nsingle calls: {ok} ok, empty {empty}, errors {errors}, {time.time() - t0:.0f}s total")
+
+          # Raw or adjusted? NVDA split 10-for-1 effective 2024-06-10. The raw close on 2024-06-07 was about 1,208.
+          n = yf.Ticker("NVDA").history(start="2024-06-05", end="2024-06-12", auto_adjust=False)
+          print("\nNVDA around the 2024-06-10 split (Close, Adj Close):")
+          print(n[["Close", "Adj Close", "Stock Splits"]].round(2).to_string())
+
+          s = time.time()
+          b = yf.download(tickers[:19], start="2010-01-01", auto_adjust=False, actions=True, progress=False, threads=True)
+          print(f"\nbatch call: shape {b.shape}, {time.time() - s:.1f}s")
