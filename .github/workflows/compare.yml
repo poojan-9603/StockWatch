@@ -1,0 +1,55 @@
+# M1 step 7: yfinance against Tiingo on 30 stocks. Manual. Tiingo downloads checkpoint in R2 raw/tiingo_compare/,
+# so a rerun doesn't spend the monthly symbol budget again.
+name: compare
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Check secrets
+        run: |
+          for v in TIINGO_API_KEY R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Prices and checkpoints from R2
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          aws s3 sync "s3://$BUCKET/market/prices" out/market/prices $r2
+          aws s3 sync "s3://$BUCKET/raw/tiingo_compare" out/raw/tiingo_compare $r2
+      - name: Compare (about 75 s per Tiingo symbol)
+        run: python -m pipeline.compare out
+      - name: Save raw downloads to R2
+        if: always()
+        run: |
+          [ -d out/raw/tiingo_compare ] || exit 0
+          aws s3 sync out/raw/tiingo_compare "s3://$BUCKET/raw/tiingo_compare" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compare-outputs
+          path: out/review/
+          retention-days: 7
+          if-no-files-found: ignore

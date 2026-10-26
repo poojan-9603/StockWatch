@@ -203,8 +203,9 @@ def fetch_yfinance(out, symbols, batch=100):
     return failed
 
 
-def fetch_tiingo(out, symbols):
-    d = out / "raw" / "tiingo"
+def fetch_tiingo(out, symbols, folder="tiingo"):
+    """Raw Tiingo history per symbol into raw/<folder>/<SYMBOL>.json, skipping files already there."""
+    d = out / "raw" / folder
     d.mkdir(parents=True, exist_ok=True)
     todo = [s for s in symbols if not (d / f"{s}.json").exists()]
     print(f"tiingo: {len(symbols)} symbols, {len(todo)} to fetch at about 50 an hour", flush=True)
