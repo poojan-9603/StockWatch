@@ -39,6 +39,8 @@ jobs:
           r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
           aws s3 cp "s3://$BUCKET/market/ticker_map.parquet" out/market/ticker_map.parquet $r2
           aws s3 cp "s3://$BUCKET/market/companies.parquet" out/market/companies.parquet $r2
+          aws s3 cp "s3://$BUCKET/market/fundamentals/facts.parquet" out/market/fundamentals/facts.parquet $r2
+          aws s3 sync "s3://$BUCKET/raw/yfinance/$(date -u +%F)" "out/raw/yfinance/$(date -u +%F)" $r2
           aws s3 sync "s3://$BUCKET/raw/tiingo" out/raw/tiingo $r2
           aws s3 sync "s3://$BUCKET/raw/wiki" out/raw/wiki $r2
           aws s3 cp "s3://$BUCKET/market/price_gaps.parquet" out/market/price_gaps.parquet $r2 || true
@@ -65,6 +67,7 @@ jobs:
           aws s3 cp out/market/price_plan.parquet "s3://$BUCKET/market/price_plan.parquet" $r2
           aws s3 cp out/market/price_map.parquet "s3://$BUCKET/market/price_map.parquet" $r2
           aws s3 cp out/market/price_gaps.parquet "s3://$BUCKET/market/price_gaps.parquet" $r2
+          aws s3 cp out/market/price_identity.parquet "s3://$BUCKET/market/price_identity.parquet" $r2
           echo "market/prices in R2: $(aws s3 ls "s3://$BUCKET/market/prices" --recursive --summarize $r2 | tail -2 | tr '\n' ' ')"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -74,6 +77,7 @@ jobs:
             out/market/price_plan.parquet
             out/market/price_map.parquet
             out/market/price_gaps.parquet
+            out/market/price_identity.parquet
             out/review/
           retention-days: 7
           if-no-files-found: ignore

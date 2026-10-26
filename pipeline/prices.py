@@ -330,6 +330,28 @@ def coverage(plan_df, span, last_day):
     return pd.DataFrame(pm), pd.DataFrame(gp, columns=cols)
 
 
+def apply_identity(out, pm, g, last_day):
+    """Run pipeline.identity on the validated stretches. A Tiingo or WIKI stretch that fails becomes a gap, and
+    its symbol is rejected for the next plan. A yfinance stretch is the listed company's own ticker by
+    construction, so a failure there is kept and listed for review: it points at the check (share classes,
+    say) rather than at the source."""
+    from pipeline.identity import check
+    facts = out / "market" / "fundamentals" / "facts.parquet"
+    if not facts.exists():
+        sys.exit(f"{facts} is missing: run the backfill workflow first")
+    segs = pd.read_parquet(out / "market" / "ticker_map.parquet")
+    idv = check(pm, out / "market" / "prices", facts, segs, last_day)
+    drop = idv["source"].isin(["tiingo", "wiki"]) & (idv["verdict"] == "fail")
+    why = lambda r: "identity check failed: " + ", ".join(
+        k for k in ["shared", "dividends", "float"] if (bool(r[k]) if k == "shared" else r[k] == "fail"))
+    new_gaps = pd.DataFrame([{"label": r["label"], "cik": r["cik"], "source": r["source"], "symbols": r["symbol"],
+                              "gap_from": r["from"], "gap_to": r["to"] if isinstance(r["to"], str) else last_day,
+                              "reason": why(r), "rejected": r["symbol"]} for _, r in idv[drop].iterrows()],
+                            columns=g.columns)
+    keep = pm.reset_index(drop=True)[~drop.values]
+    return keep, pd.concat([g, new_gaps], ignore_index=True), idv
+
+
 def main(out_dir, step):
     out = Path(out_dir)
     if step == "plan":
@@ -371,12 +393,18 @@ def main(out_dir, step):
         n, span = build(out)
         last_day = max((v[1] for (src, _), v in span.items() if src == "yfinance"), default=today())
         pm, g = coverage(pl, span, last_day)
+        pm, g, idv = apply_identity(out, pm, g, last_day)
         pm.to_parquet(out / "market" / "price_map.parquet", index=False)
         g.to_parquet(out / "market" / "price_gaps.parquet", index=False)
+        idv.to_parquet(out / "market" / "price_identity.parquet", index=False)
         (out / "review").mkdir(parents=True, exist_ok=True)
         g.to_csv(out / "review" / "price_gaps.csv", index=False)
+        vendor = idv["source"].isin(["tiingo", "wiki"])
+        idv[vendor & (idv["verdict"] == "unverifiable")].to_csv(out / "review" / "price_unverified.csv", index=False)
+        idv[~vendor & (idv["verdict"] == "fail")].to_csv(out / "review" / "price_identity_yfinance_fails.csv", index=False)
         per_source = pd.Series([src for src, _ in span]).value_counts().to_dict()
         print(f"prices: {n} rows, symbols per source {per_source}, last day {last_day}")
+        print("identity verdicts:", idv.groupby(["source", "verdict"]).size().to_dict())
         print(f"validated index stretches: {len(pm)}; without prices: {len(g)} "
               f"({g['reason'].value_counts().to_dict()})")
         if len(g):
