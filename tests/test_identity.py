@@ -60,3 +60,25 @@ def test_identity_resolves_a_shared_series_and_catches_a_wrong_price_level(tmp_p
     assert v.loc["BIG", "float"] == "pass"
     assert v.loc["WRONG", "float"] == "fail" and v.loc["WRONG", "verdict"] == "fail"
     assert v.loc["FRC", "verdict"] == "unverifiable"  # no SEC company record: nothing to check against
+
+
+def test_late_starting_vendor_series_must_pass_not_just_avoid_failing(tmp_path):
+    from pipeline.prices import apply_identity
+    px = prices(days("PARA", "tiingo", "2021-02-12", "2021-12-31", 10.0) + days("OLDX", "wiki", "2010-01-04", "2012-12-31", 50.0))
+    (tmp_path / "market" / "fundamentals").mkdir(parents=True)
+    ds.write_dataset(pa.Table.from_pandas(px, preserve_index=False), tmp_path / "market" / "prices", format="parquet",
+                     partitioning=["year"], partitioning_flavor="hive")
+    pa.parquet.write_table(pa.Table.from_pylist([], SCHEMA), tmp_path / "market" / "fundamentals" / "facts.parquet")
+    pd.DataFrame([
+        {"ticker": "VIAC", "spell_start": "2019-12-05", "start": "2019-12-05", "end": "2022-02-17", "cik": 9.0},
+        {"ticker": "OLDX", "spell_start": "2005-01-03", "start": "2005-01-03", "end": "2013-01-01", "cik": 8.0},
+    ]).to_parquet(tmp_path / "market" / "ticker_map.parquet")
+    pm = pd.DataFrame([  # nothing to check either against: both unverifiable
+        {"label": "VIAC", "cik": 9, "source": "tiingo", "symbol": "PARA", "from": "2021-02-12", "to": "2022-02-17", "late": True},
+        {"label": "OLDX", "cik": 8, "source": "wiki", "symbol": "OLDX", "from": "2010-01-04", "to": "2013-01-01", "late": False},
+    ])
+    gaps = pd.DataFrame(columns=["label", "cik", "source", "symbols", "gap_from", "gap_to", "reason", "rejected"])
+    keep, g, idv = apply_identity(tmp_path, pm, gaps, "2026-10-23")
+    assert list(keep["label"]) == ["OLDX"]  # kept, and listed as unverifiable for review
+    assert list(zip(g["label"], g["reason"], g["rejected"])) == [
+        ("VIAC", "late-starting series not proven to be this company", "PARA")]

@@ -101,9 +101,11 @@ def plan(segs, companies, tiingo, aliases, rejected=frozenset()):
     rows, done = [], set()
     later_tickers = segs.sort_values("start").groupby("cik")["ticker"].apply(lambda t: list(dict.fromkeys(t))).to_dict()
 
-    def piece(label, frm, to, source, symbols, cik, index=True):
+    def piece(label, frm, to, source, symbols, cik, index=True, late=False):
+        """late: the source's history starts after this security was already trading (Tiingo cut at 2016, or
+        another company that took the ticker), so identity has to be proven, not just not disproven."""
         rows.append({"label": label, "need_from": frm, "need_to": to, "source": source,
-                     "symbols": "|".join(symbols), "cik": cik, "index": index})
+                     "symbols": "|".join(symbols), "cik": cik, "index": index, "late": late})
 
     for s in security_spells(segs):
         if s["end"] is not None and s["end"] < SINCE:
@@ -138,7 +140,7 @@ def plan(segs, companies, tiingo, aliases, rejected=frozenset()):
         if best is not None:
             lo = frm if best.startDate <= shift(frm, SLACK) else best.startDate
             hi = to_ if best.endDate >= shift(to_, -SLACK) else best.endDate
-            piece(s["label"], lo, hi if hi != to_ else to, "tiingo", [best.ticker], cik)
+            piece(s["label"], lo, hi if hi != to_ else to, "tiingo", [best.ticker], cik, late=lo > frm)
             rest = [(a, b) for a, b in [(frm, lo), (hi, to_)] if (pd.Timestamp(b) - pd.Timestamp(a)).days > SLACK]
         for a, b in rest:  # WIKI for what Tiingo lacks, up to its 2018 freeze; after that it stays a gap
             wiki = [t for t in cands if t != s["label"] + "Q" and (s["label"], "wiki", t) not in rejected]
@@ -317,7 +319,8 @@ def coverage(plan_df, span, last_day):
                 rejected.append(s)
                 continue
             pm.append({"label": r.label, "cik": r.cik, "source": r.source, "symbol": s, "from": cur,
-                       "to": min(last, to) if last < shift(to, -SLACK) else r.need_to})
+                       "to": min(last, to) if last < shift(to, -SLACK) else r.need_to,
+                       "late": bool(getattr(r, "late", False))})
             cur, used = last, True
             if last >= shift(to, -SLACK):
                 break
@@ -341,9 +344,12 @@ def apply_identity(out, pm, g, last_day):
         sys.exit(f"{facts} is missing: run the backfill workflow first")
     segs = pd.read_parquet(out / "market" / "ticker_map.parquet")
     idv = check(pm, out / "market" / "prices", facts, segs, last_day)
-    drop = idv["source"].isin(["tiingo", "wiki"]) & (idv["verdict"] == "fail")
-    why = lambda r: "identity check failed: " + ", ".join(
+    vendor = idv["source"].isin(["tiingo", "wiki"])
+    late = idv["late"].fillna(False).astype(bool) if "late" in idv else False
+    drop = vendor & ((idv["verdict"] == "fail") | (late & (idv["verdict"] != "pass")))
+    why = lambda r: ("identity check failed: " + ", ".join(
         k for k in ["shared", "dividends", "float"] if (bool(r[k]) if k == "shared" else r[k] == "fail"))
+        if r["verdict"] == "fail" else "late-starting series not proven to be this company")
     new_gaps = pd.DataFrame([{"label": r["label"], "cik": r["cik"], "source": r["source"], "symbols": r["symbol"],
                               "gap_from": r["from"], "gap_to": r["to"] if isinstance(r["to"], str) else last_day,
                               "reason": why(r), "rejected": r["symbol"]} for _, r in idv[drop].iterrows()],
