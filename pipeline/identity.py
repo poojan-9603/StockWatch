@@ -97,7 +97,8 @@ def check(pm, prices_dir, facts_path, segs, last_day):
     for r in pm.itertuples():
         s = segs[(segs["ticker"] == r.label) & (segs["start"] < r.to_) &
                  (segs["end"].isna() | (segs["end"] > r.frm))]
-        cik_sets.append(",".join(sorted({str(int(c)) for c in s["cik"].dropna()})) or str(int(r.cik)))
+        fallback = str(int(r.cik)) if pd.notna(r.cik) else f"ticker:{r.label}"  # First Republic has no SEC record
+        cik_sets.append(",".join(sorted({str(int(c)) for c in s["cik"].dropna()})) or fallback)
     pm["company"] = cik_sets
 
     keys = set(zip(pm["source"], pm["symbol"]))
@@ -109,7 +110,7 @@ def check(pm, prices_dir, facts_path, segs, last_day):
     by_key = {k: g.sort_values("date") for k, g in px.groupby(["source", "symbol"])}
     closes = {k: g.set_index("date")["close"] for k, g in by_key.items()}
 
-    ciks = sorted({int(c) for s in cik_sets for c in s.split(",")})
+    ciks = sorted({int(c) for s in cik_sets for c in s.split(",") if c.isdigit()})
     tags = [DIV_TAG, "EntityPublicFloat"] + SHARE_TAGS
     f = ds.dataset(facts_path).to_table(
         columns=["cik", "tag", "unit", "start", "end", "value", "form", "filed"],
@@ -127,7 +128,7 @@ def check(pm, prices_dir, facts_path, segs, last_day):
     for r in pm.itertuples():
         p = by_key.get((r.source, r.symbol), pd.DataFrame(columns=["date", "close", "dividend"]))
         p = p[(p["date"] >= r.frm) & (p["date"] < r.to_)]
-        cs = [int(c) for c in r.company.split(",")]
+        cs = [int(c) for c in r.company.split(",") if c.isdigit()]  # none: no SEC data, so unverifiable
         d = divs[divs["cik"].isin(cs) & (divs["start"] >= r.frm) & (divs["end"] < r.to_)]
         fl = floats[floats["cik"].isin(cs) & (floats["end"] >= r.frm) & (floats["end"] < r.to_)]
         s = sh[sh["cik"].isin(cs)].reset_index(drop=True)

@@ -52,9 +52,11 @@ def test_identity_resolves_a_shared_series_and_catches_a_wrong_price_level(tmp_p
         {"label": "ACT", "cik": 2, "source": "tiingo", "symbol": "AGN", "from": "2011-01-03", "to": "2014-01-01"},
         {"label": "BIG", "cik": 3, "source": "wiki", "symbol": "BIG", "from": "2011-01-03", "to": "2014-01-01"},
         {"label": "WRONG", "cik": 4, "source": "wiki", "symbol": "BIG", "from": "2011-01-03", "to": "2014-01-01"},
+        {"label": "FRC", "cik": None, "source": "tiingo", "symbol": "FRCB", "from": "2019-01-02", "to": "2023-05-04"},
     ])
     v = check(pm, tmp_path / "prices", tmp_path / "facts.parquet", segs, "2026-10-23").set_index("label")
     assert v.loc["AGN", "dividends"] == "pass" and v.loc["AGN", "verdict"] == "pass"  # keeps the shared series
     assert bool(v.loc["ACT", "shared"]) and v.loc["ACT", "verdict"] == "fail"          # no proof it's Actavis
     assert v.loc["BIG", "float"] == "pass"
     assert v.loc["WRONG", "float"] == "fail" and v.loc["WRONG", "verdict"] == "fail"
+    assert v.loc["FRC", "verdict"] == "unverifiable"  # no SEC company record: nothing to check against
