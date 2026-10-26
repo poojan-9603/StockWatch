@@ -41,12 +41,15 @@ def test_main_end_to_end(tmp_path):
     a = series("AAA", [100.0] * 14 + [150.0] * (n - 14))           # +50% on day 15: an 8-K explains it
     b = series("BBB", [20.0] * 14 + [35.0] * (n - 14))             # +75%, no 8-K: quarantine
     c = series("CCC", [50.0 + i for i in range(n)]).drop(index=range(5, 12))  # 7 trading days missing
-    px = pd.concat([a, b, c], ignore_index=True)
+    d = series("DDD", [5.0 + 0.01 * i for i in range(25)] + [500.0] * (n - 25), source="tiingo")  # jump after its stretch
+    px = pd.concat([a, b, c, d], ignore_index=True)
     px["dividend"], px["fetched"], px["year"] = 0.0, "x", 2015
     ds.write_dataset(pa.Table.from_pandas(px, preserve_index=False), m / "prices", format="parquet",
                      partitioning=["year"], partitioning_flavor="hive")
     pd.DataFrame([{"label": s, "cik": i, "source": "yfinance", "symbol": s, "from": "2015-01-02", "to": None, "late": False}
-                  for i, s in [(1, "AAA"), (2, "BBB"), (3, "CCC")]]).to_parquet(m / "price_map.parquet")
+                  for i, s in [(1, "AAA"), (2, "BBB"), (3, "CCC")]] +
+                 [{"label": "DDD", "cik": 4, "source": "tiingo", "symbol": "DDD", "from": "2015-01-02",
+                   "to": d["date"][20], "late": False}]).to_parquet(m / "price_map.parquet")
     pd.DataFrame([{"ticker": s, "spell_start": "2010-01-04", "start": "2010-01-04", "end": None, "cik": float(i), "link": None}
                   for i, s in [(1, "AAA"), (2, "BBB"), (3, "CCC")]]).to_parquet(m / "ticker_map.parquet")
     pd.DataFrame([{"cik": i, "tickers": s, "exchanges": "NYSE"} for i, s in [(1, "AAA"), (2, "BBB"), (3, "CCC")]]
@@ -67,4 +70,5 @@ def test_main_end_to_end(tmp_path):
     assert ("move", "quarantine", "BBB") in got and not any(c == "move" and s == "AAA" for c, _, s in got)
     assert ("missing", "quarantine", "CCC") in got
     assert ("identity", "quarantine", "1") in got
+    assert not any(s == "DDD" for _, _, s in got)  # Tiingo checked only inside its validated stretch
     assert (i["check"] == "block day").sum() == 7

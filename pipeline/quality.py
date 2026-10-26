@@ -1,7 +1,8 @@
 """M1 data quality checks over the full history. Every issue is sorted into block (no verdicts that day),
 quarantine (skip that stock for those dates) or log.
 
-Prices (index stretches from market/price_map.parquet, plus every other symbol's whole series):
+Prices (yfinance symbols over their whole series, since they're today's live universe; Tiingo and WIKI symbols only
+inside their validated index stretches from market/price_map.parquet):
   calendar     trading days = days on which at least half of the year's most-covered yfinance symbols traded
   missing      trading days without a row inside a stretch: a run of more than 5 is quarantine, fewer is log
   block day    a trading day on which under 95% of the index stretches that should have a price have one
@@ -130,6 +131,17 @@ def price_checks(out):
         chunk = dset.to_table(columns=COLS, filter=pc.field("symbol").isin(symbols[i:i + 300])).to_pandas()
         series = {k: g.sort_values("date").reset_index(drop=True) for k, g in chunk.groupby(["source", "symbol"])}
         for (src, sym), p in series.items():
+            if src != "yfinance":  # a Tiingo or WIKI series is used only inside its validated stretches; outside
+                # them it can be post-bankruptcy OTC trading or another company on the ticker (CPWR in 2017)
+                st = stretches.get((src, sym))
+                if st is None:
+                    continue
+                inside = np.zeros(len(p), dtype=bool)
+                for r in st.itertuples():
+                    inside |= (p["date"] >= r.frm).values & (p["date"] < (r.to if isinstance(r.to, str) else "~")).values
+                p = p[inside].reset_index(drop=True)
+                if p.empty:
+                    continue
             issues += sanity(p) + stale(p)
             closes = {s2: q.set_index("date")["close"] for (s2, y2), q in series.items() if y2 == sym and s2 != src}
             for day, move in big_moves(p):
