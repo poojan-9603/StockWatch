@@ -1,0 +1,20 @@
+# Tickers a dead S&P security actually traded under, where fja labels it with a later ticker. Read by pipeline/prices.py.
+label,ticker,note
+BHGE,BHI,Baker Hughes Inc. traded as BHI until the 2017 GE Oil & Gas deal
+DXC,CSC,Computer Sciences traded as CSC
+ACT,WPI,Watson Pharmaceuticals traded as WPI until it became Actavis (ACT) in Jan 2013
+FOXA,NWSA,21st Century Fox traded as NWSA (the old News Corp) until mid-2013
+ANDV,TSO,Tesoro traded as TSO until it became Andeavor in 2017
+CBS,PARA,Tiingo carries the CBS / ViacomCBS / Paramount history under PARA
+VIAC,PARA,Tiingo carries the CBS / ViacomCBS / Paramount history under PARA
+RSHCQ,RSH,RadioShack traded as RSH before its 2015 bankruptcy
+SUNEQ,WFR,SunEdison traded as WFR (MEMC Electronic Materials) until 2013
+SUNEQ,SUNE,then as SUNE
+BTUUQ,BTU,Peabody Energy traded as BTU before its 2016 bankruptcy
+EKDKQ,EK,Eastman Kodak traded as EK before its 2012 bankruptcy
+ANRZQ,ANR,Alpha Natural Resources traded as ANR before its 2015 bankruptcy
+ATGE,DV,DeVry traded as DV before it became Adtalem
+AABA,YHOO,Yahoo traded as YHOO until it became Altaba in 2017
+WYND,WYN,Wyndham Worldwide traded as WYN until 2018
+FRC,FRCB,Tiingo carries First Republic's history under its later OTC ticker FRCB
+HFC,DINO,HollyFrontier shares became HF Sinclair (DINO) one for one in 2022

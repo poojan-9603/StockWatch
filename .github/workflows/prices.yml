@@ -1,0 +1,77 @@
+# M1 step 5 price backfill. Manual, needs the backfill workflow's market files in R2. Safe to rerun: Tiingo and
+# WIKI fetches checkpoint per symbol in R2 raw/, so a run cut short continues where it stopped.
+name: prices
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+      NASDAQ_DATA_LINK_KEY: ${{ secrets.NASDAQ_DATA_LINK_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Check secrets
+        run: |
+          for v in TIINGO_API_KEY NASDAQ_DATA_LINK_KEY R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Inputs and checkpoints from R2
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          aws s3 cp "s3://$BUCKET/market/ticker_map.parquet" out/market/ticker_map.parquet $r2
+          aws s3 cp "s3://$BUCKET/market/companies.parquet" out/market/companies.parquet $r2
+          aws s3 sync "s3://$BUCKET/raw/tiingo" out/raw/tiingo $r2
+          aws s3 sync "s3://$BUCKET/raw/wiki" out/raw/wiki $r2
+          echo "checkpoints: $(ls out/raw/tiingo 2>/dev/null | wc -l) tiingo, $(ls out/raw/wiki 2>/dev/null | wc -l) wiki"
+      - name: Plan sources
+        run: python -m pipeline.prices out plan
+      - name: yfinance (listed companies)
+        run: python -m pipeline.prices out yfinance
+      - name: WIKI Prices (gaps before 2018-03-27)
+        run: python -m pipeline.prices out wiki
+      - name: Tiingo (dead companies, about 50 an hour)
+        timeout-minutes: 300
+        run: python -m pipeline.prices out tiingo
+      - name: Build prices and gaps
+        run: python -m pipeline.prices out build
+      - name: Save raw downloads to R2
+        if: always()
+        run: |
+          [ -d out/raw ] || exit 0
+          aws s3 sync out/raw "s3://$BUCKET/raw" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - name: Save prices to R2
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          aws s3 sync out/market/prices "s3://$BUCKET/market/prices" --delete $r2
+          aws s3 cp out/market/price_plan.parquet "s3://$BUCKET/market/price_plan.parquet" $r2
+          aws s3 cp out/market/price_gaps.parquet "s3://$BUCKET/market/price_gaps.parquet" $r2
+          echo "market/prices in R2: $(aws s3 ls "s3://$BUCKET/market/prices" --recursive --summarize $r2 | tail -2 | tr '\n' ' ')"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: price-outputs
+          path: |
+            out/market/price_plan.parquet
+            out/market/price_gaps.parquet
+            out/review/
+          retention-days: 7
+          if-no-files-found: ignore
