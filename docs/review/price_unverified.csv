@@ -1,0 +1,32 @@
+label,company_name,source,symbol,from,to,dividends,dividend_years,float,float_years,verdict
+APOL,APOLLO EDUCATION GROUP INC,wiki,APOL,2010-01-01,2013-07-01,n/a,0,n/a,1,unverifiable
+AYE,"ALLEGHENY ENERGY, INC",tiingo,AYE,2010-01-01,2011-02-28,n/a,0,n/a,1,unverifiable
+BJS,BJ SERVICES CO LLC,tiingo,BJS,2010-01-01,2010-04-29,n/a,0,n/a,0,unverifiable
+FOXA,"TWENTY-FIRST CENTURY FOX, INC.",wiki,FOXA,2010-01-01,2018-03-27,n/a,0,n/a,0,unverifiable
+LXK,LEXMARK INTERNATIONAL INC /KY/,wiki,LXK,2010-01-01,2012-10-01,n/a,1,n/a,0,unverifiable
+MFE,"McAfee, Inc.",tiingo,MFE,2010-01-01,2011-03-01,n/a,0,n/a,1,unverifiable
+MIL,MILLIPORE CORP /MA,tiingo,MIL,2010-01-01,2010-07-15,n/a,0,n/a,0,unverifiable
+ODP,ODP Corp,tiingo,ODP,2010-01-01,2010-12-20,n/a,0,n/a,1,unverifiable
+PBG,PEPSI BOTTLING GROUP INC,tiingo,PBG,2010-01-01,2010-03-01,n/a,0,n/a,0,unverifiable
+PCG,PACIFIC GAS & ELECTRIC Co,tiingo,PCG,2010-01-01,2019-01-18,n/a,0,n/a,0,unverifiable
+QLGC,QLOGIC CORP,wiki,QLGC,2010-01-01,2011-01-18,n/a,0,n/a,1,unverifiable
+STR,DOMINION QUESTAR CORP,wiki,STR,2010-01-01,2010-07-01,n/a,0,n/a,1,unverifiable
+XTO,XTO ENERGY INC,tiingo,XTO,2010-01-01,2010-06-28,n/a,0,n/a,0,unverifiable
+PETM,PETSMART INC,tiingo,PETM,2012-10-05,2015-03-12,n/a,0,n/a,1,unverifiable
+DISCK,"Warner Bros. Discovery, Inc.",tiingo,WBD,2014-08-07,2022-04-11,n/a,0,n/a,1,unverifiable
+BXLT,Baxalta Inc,tiingo,BXLT,2015-07-01,2016-06-03,n/a,0,n/a,0,unverifiable
+CPGX,"Columbia Pipeline Group, Inc.",tiingo,CPGX,2015-07-02,2016-07-01,n/a,0,n/a,0,unverifiable
+CMCSK,COMCAST CORP,tiingo,CMCSA,2015-09-21,2015-12-14,n/a,0,n/a,0,unverifiable
+FOX,"TWENTY-FIRST CENTURY FOX, INC.",wiki,FOX,2015-09-21,2018-03-27,n/a,0,n/a,0,unverifiable
+CSRA,CSRA Inc.,wiki,CSRA,2015-11-30,2018-03-27,n/a,1,n/a,1,unverifiable
+CCEP,"COCA-COLA EUROPEAN PARTNERS US, LLC",wiki,CCE,2016-01-04,2016-05-31,n/a,0,n/a,0,unverifiable
+EVHC,Envision Healthcare Corp,tiingo,EVHC,2016-12-02,2018-10-11,n/a,0,n/a,1,unverifiable
+DISH,DISH Network CORP,tiingo,DISH,2017-03-13,2023-06-20,n/a,0,n/a,1,unverifiable
+INFO,IHS Markit Ltd.,wiki,INFO,2017-06-02,2018-03-27,n/a,0,n/a,0,unverifiable
+WCG,"WELLCARE HEALTH PLANS, INC.",tiingo,WCG,2018-09-17,2020-01-28,n/a,0,n/a,0,unverifiable
+FRC,(no SEC record),tiingo,FRCB,2019-01-02,2023-05-04,n/a,0,n/a,0,unverifiable
+FOXA,"TWENTY-FIRST CENTURY FOX, INC.",tiingo,FOXA,2019-03-12,2019-03-19,n/a,0,n/a,0,unverifiable
+FOX,"TWENTY-FIRST CENTURY FOX, INC.",tiingo,FOX,2019-03-13,2019-03-19,n/a,0,n/a,0,unverifiable
+SBNY,Signature Bank Corp,tiingo,SBNY,2021-12-20,2023-03-15,n/a,0,n/a,0,unverifiable
+PARA,Paramount Global,tiingo,PARA,2022-02-17,2025-08-08,n/a,0,n/a,0,unverifiable
+DAY,"Dayforce, Inc.",tiingo,DAY,2024-02-01,2026-02-09,n/a,0,n/a,1,unverifiable

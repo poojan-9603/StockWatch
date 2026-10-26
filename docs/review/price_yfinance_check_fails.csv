@@ -1,0 +1,10 @@
+label,company_name,source,symbol,from,to,dividends,dividend_years,float,float_years,verdict
+BKNG,Booking Holdings Inc.,yfinance,BKNG,2010-01-01,,fail,2,pass,17,fail
+CEG,Constellation Energy Corp,yfinance,CEG,2022-02-02,,fail,3,pass,4,fail
+NBR,NABORS INDUSTRIES LTD,yfinance,NBR,2010-01-01,2015-03-23,fail,2,pass,5,fail
+PAYC,"Paycom Software, Inc.",yfinance,PAYC,2020-01-28,2026-03-23,fail,3,pass,6,fail
+PGR,PROGRESSIVE CORP/OH/,yfinance,PGR,2010-01-01,,fail,10,pass,16,fail
+PLD,"Prologis, Inc.",yfinance,PLD,2010-01-01,,fail,10,pass,16,fail
+SPG,SIMON PROPERTY GROUP INC.,yfinance,SPG,2010-01-01,,n/a,0,fail,4,fail
+T,AT&T INC.,yfinance,T,2010-01-01,,fail,15,pass,15,fail
+V,VISA INC.,yfinance,V,2010-01-01,,fail,12,n/a,1,fail
