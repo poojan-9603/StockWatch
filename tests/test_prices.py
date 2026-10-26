@@ -1,6 +1,6 @@
 import pandas as pd
 
-from pipeline.prices import common_tickers, gaps, plan, rebuild_raw
+from pipeline.prices import common_tickers, coverage, plan, rebuild_raw
 
 
 def test_rebuild_raw_undoes_split_adjustment_like_aapl_2012():
@@ -56,16 +56,38 @@ def test_plan_routes_live_renamed_and_dead_securities():
     assert not p.loc[p["label"] == "XYZ", "index"].any()
 
 
-def test_gaps_allow_a_few_days_at_the_end_and_flag_real_holes():
+def test_coverage_chains_symbols_rejects_late_series_and_allows_a_few_days_at_the_end():
     p = pd.DataFrame([
         {"label": "A", "need_from": "2010-01-01", "need_to": "2016-02-01", "source": "wiki", "symbols": "A", "cik": 1, "index": True},
-        {"label": "B", "need_from": "2010-01-01", "need_to": "2013-09-11", "source": "wiki", "symbols": "B", "cik": 2, "index": True},
-        {"label": "C", "need_from": "2018-03-27", "need_to": "2019-09-23", "source": "none", "symbols": "", "cik": 3, "index": True},
+        {"label": "ACT", "need_from": "2010-01-01", "need_to": "2015-03-23", "source": "wiki", "symbols": "WPI|ACT", "cik": 2, "index": True},
+        {"label": "VIAC", "need_from": "2019-12-05", "need_to": "2022-02-17", "source": "tiingo", "symbols": "PARA", "cik": 3, "index": True},
+        {"label": "B", "need_from": "2010-01-01", "need_to": "2013-09-11", "source": "wiki", "symbols": "B", "cik": 4, "index": True},
+        {"label": "C", "need_from": "2018-03-27", "need_to": "2019-09-23", "source": "none", "symbols": "", "cik": 5, "index": True},
     ])
-    span = {("wiki", "A"): ("2010-01-04", "2016-01-29"), ("wiki", "B"): ("2011-06-01", "2013-09-10")}
-    g = gaps(p, span, "2026-10-23")
-    assert list(zip(g["label"], g["gap_from"], g["gap_to"])) == [
-        ("B", "2010-01-01", "2011-06-01"), ("C", "2018-03-27", "2019-09-23")]
+    span = {("wiki", "A"): ("2010-01-04", "2016-01-29"),           # stops 3 days short: fine
+            ("wiki", "WPI"): ("2005-01-03", "2013-01-24"), ("wiki", "ACT"): ("2013-01-25", "2015-03-20"),
+            ("tiingo", "PARA"): ("2021-02-12", "2026-10-23"),       # Banzai, not ViacomCBS: rejected whole
+            ("wiki", "B"): ("2010-01-04", "2012-06-01")}            # stops early
+    pm, g = coverage(p, span, "2026-10-23")
+    assert list(zip(pm["label"], pm["symbol"], pm["from"])) == [
+        ("A", "A", "2010-01-01"), ("ACT", "WPI", "2010-01-01"), ("ACT", "ACT", "2013-01-24"), ("B", "B", "2010-01-01")]
+    assert list(zip(g["label"], g["gap_from"], g["gap_to"], g["reason"], g["rejected"])) == [
+        ("VIAC", "2019-12-05", "2022-02-17", "other security on ticker", "PARA"),
+        ("B", "2012-06-01", "2013-09-11", "ends early", ""),
+        ("C", "2018-03-27", "2019-09-23", "no source", "")]
+
+
+def test_plan_skips_rejected_symbols_and_tiingo_entries_its_api_cannot_serve():
+    segs = pd.DataFrame([seg("PSKY", "2025-08-08", None, 1), seg("APC", "1997-07-28", "2019-08-09", 2)])
+    companies = pd.DataFrame([{"cik": 1, "tickers": "SKYD,PSKY,SKYD-WT", "exchanges": "Nasdaq,Nasdaq,Nasdaq"},
+                              {"cik": 2, "tickers": "", "exchanges": ""}])
+    tiingo = pd.DataFrame([  # Anadarko's old APC entry, then a newer company on APC: the API serves only the newer
+        {"ticker": "APC", "assetType": "Stock", "priceCurrency": "USD", "startDate": "1986-09-09", "endDate": "2019-08-08"},
+        {"ticker": "APC", "assetType": "Stock", "priceCurrency": "USD", "startDate": "2026-02-12", "endDate": "2026-10-23"}])
+    p = plan(segs, companies, tiingo, {}, rejected={("PSKY", "yfinance", "PSKY")})
+    got = {(r.label, r.source, r.symbols) for r in p.itertuples() if r.index}
+    assert ("PSKY", "yfinance", "SKYD") in got
+    assert ("APC", "wiki", "APC") in got and not any(src == "tiingo" for _, src, _ in got)
 
 
 def test_build_writes_year_partitions_from_raw_files_and_reruns_identically(tmp_path):

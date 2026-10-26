@@ -17,7 +17,12 @@ Usage: python -m pipeline.prices OUT_DIR plan|yfinance|tiingo|wiki|build
   yfinance   raw/yfinance/<date>/batch_NNN.parquet
   tiingo     raw/tiingo/<SYMBOL>.json, one per symbol, skipped if already there (checkpoint)
   wiki       raw/wiki/<SYMBOL>.json, same
-  build      market/prices/year=YYYY/ and market/price_gaps.parquet from the raw files
+  build      from the raw files: market/prices/year=YYYY/ (all rows, every symbol), market/price_map.parquet
+             (which symbol's rows are valid for which index security and dates) and market/price_gaps.parquet.
+             Use prices through price_map: a symbol's rows outside its validated stretches may be another
+             company that later took the ticker.
+
+Rerunning after a build re-plans around rejected symbols (a series that starts too late is another security).
 """
 import io
 import json
@@ -83,12 +88,16 @@ def security_spells(segs):
     return out
 
 
-def plan(segs, companies, tiingo, aliases):
+def plan(segs, companies, tiingo, aliases, rejected=frozenset()):
     """Pieces (label, need_from, need_to, source, symbols, index) covering each index security since 2010, then
-    the other listed companies' common stock on yfinance."""
+    the other listed companies' common stock on yfinance. `rejected` holds (label, source, symbol) combinations
+    an earlier build found to be another security (series starting too late); they're skipped."""
     co = companies.set_index("cik", drop=False)
     tl = tiingo[(tiingo["assetType"] == "Stock") & (tiingo["priceCurrency"] == "USD")].assign(
         T=lambda x: x["ticker"].str.upper().str.replace("-", "."))
+    # Tiingo's API serves only the newest listing on a ticker (APC is today's company, not Anadarko), so an
+    # older entry in its list can't be fetched
+    tl = tl[tl["startDate"].notna()].sort_values("startDate").groupby("T").tail(1)
     rows, done = [], set()
     later_tickers = segs.sort_values("start").groupby("cik")["ticker"].apply(lambda t: list(dict.fromkeys(t))).to_dict()
 
@@ -102,22 +111,24 @@ def plan(segs, companies, tiingo, aliases):
         frm, to, cik = max(s["start"], SINCE), s["end"], s["cik"]
         c = co.loc[int(cik)] if pd.notna(cik) and int(cik) in co.index else None
         cur = common_tickers(c) if c is not None and listed(c) else []
-        if s["label"] in cur:
-            piece(s["label"], frm, to, "yfinance", [s["label"]], cik)
+        # still listed: its own ticker, else today's ticker when there's only one (FB -> META), else the
+        # company's other tickers (PSKY now trades as SKYD), skipping any an earlier build rejected
+        yf_cands = ([s["label"]] + [t for t in cur if t != s["label"]]) if s["label"] in cur else \
+            (cur if len(cur) == 1 else [])
+        yf_cands = [t for t in yf_cands if (s["label"], "yfinance", t) not in rejected]
+        if yf_cands:
+            piece(s["label"], frm, to, "yfinance", yf_cands[:1], cik)
             done.add(int(cik))
             continue
-        if len(cur) == 1:  # renamed and still listed: today's ticker carries the history (FB -> META)
-            piece(s["label"], frm, to, "yfinance", cur, cik)
-            done.add(int(cik))
-            continue
-        # no longer trades: Tiingo first, using the tickers it actually traded under, then the same company's later
-        # tickers (Tiingo files Cabot Oil & Gas's COG history under CTRA), then a bankruptcy 'Q' ticker
+        # no longer trades (or today's ticker is another security): Tiingo first, using the tickers it traded
+        # under, then the same company's later tickers (Tiingo files Cabot Oil & Gas's COG history under CTRA),
+        # then a bankruptcy 'Q' ticker
         later = [t for t in later_tickers.get(cik, []) if t != s["label"]]
         cands = list(dict.fromkeys(aliases.get(s["label"], []) + [s["label"]] + later + [s["label"] + "Q"]))
         to_ = to or today()
         best, best_overlap = None, 0
         for e in tl[tl["T"].isin(cands)].itertuples():
-            if not isinstance(e.endDate, str) or not isinstance(e.startDate, str):
+            if not isinstance(e.endDate, str) or (s["label"], "tiingo", e.ticker) in rejected:
                 continue
             lo, hi = max(frm, e.startDate), min(to_, e.endDate)
             days = (pd.Timestamp(hi) - pd.Timestamp(lo)).days if lo <= hi else 0
@@ -130,8 +141,11 @@ def plan(segs, companies, tiingo, aliases):
             piece(s["label"], lo, hi if hi != to_ else to, "tiingo", [best.ticker], cik)
             rest = [(a, b) for a, b in [(frm, lo), (hi, to_)] if (pd.Timestamp(b) - pd.Timestamp(a)).days > SLACK]
         for a, b in rest:  # WIKI for what Tiingo lacks, up to its 2018 freeze; after that it stays a gap
-            if a < WIKI_END:
-                piece(s["label"], a, min(b, WIKI_END), "wiki", [t for t in cands if t != s["label"] + "Q"], cik)
+            wiki = [t for t in cands if t != s["label"] + "Q" and (s["label"], "wiki", t) not in rejected]
+            if a < WIKI_END and wiki:
+                piece(s["label"], a, min(b, WIKI_END), "wiki", wiki, cik)
+            elif a < WIKI_END:
+                piece(s["label"], a, min(b, WIKI_END), "none", [], cik)
             if b > WIKI_END:
                 piece(s["label"], max(a, WIKI_END), b, "none", [], cik)
     for c in companies.itertuples():  # live universe: every other listed company's common stock
@@ -154,9 +168,15 @@ def rebuild_raw(h):
 
 
 def fetch_yfinance(out, symbols, batch=100):
+    """Raw batches into raw/yfinance/<today>/. Symbols already fetched today are skipped (a second pass only
+    fetches what the re-plan added)."""
     import yfinance as yf
     d = out / "raw" / "yfinance" / today()
     d.mkdir(parents=True, exist_ok=True)
+    have = set().union(*[set(pd.read_parquet(p, columns=["symbol"])["symbol"]) for p in d.glob("batch_*.parquet")])
+    symbols = [s for s in symbols if s not in have]
+    first = len(list(d.glob("batch_*.parquet")))
+    print(f"yfinance: {len(symbols)} symbols to fetch, {len(have)} already fetched today", flush=True)
     failed = []
     for i in range(0, len(symbols), batch):
         chunk = symbols[i:i + batch]
@@ -174,7 +194,7 @@ def fetch_yfinance(out, symbols, batch=100):
             else:
                 failed.append(s)
         long["date"] = pd.to_datetime(long["date"], utc=True).dt.strftime("%Y-%m-%d")
-        long.to_parquet(d / f"batch_{i // batch:03d}.parquet", index=False)
+        long.to_parquet(d / f"batch_{first + i // batch:03d}.parquet", index=False)
         print(f"yfinance batch {i // batch + 1}/{-(-len(symbols) // batch)}: {len(chunk) - len(empty)} ok, "
               f"{len(empty)} retried, {len(failed)} failed so far", flush=True)
         time.sleep(2)
@@ -274,22 +294,40 @@ def build(out):
     return n, span
 
 
-def gaps(plan_df, span, last_day):
-    """Stretches of each index piece that its source's data doesn't reach. span: {(source, symbol): (first, last)}."""
-    out = []
+def coverage(plan_df, span, last_day):
+    """Validate each index piece against the data. span: {(source, symbol): (first, last)}.
+
+    A piece's symbols are tried in order (WPI, then ACT). A symbol counts from where coverage stands only if its
+    series has started by then (within SLACK days). A series that starts later is another security on the
+    same ticker (Tiingo's PARA is Banzai, not ViacomCBS) and is rejected outright, never used in part.
+
+    Returns (price_map: label, cik, source, symbol, from, to for validated stretches;
+             gaps: label, cik, source, symbols, gap_from, gap_to, reason, rejected)."""
+    pm, gp = [], []
     for r in plan_df[plan_df["index"]].itertuples():
         to = r.need_to if isinstance(r.need_to, str) else last_day
-        have = [span[(r.source, s)] for s in r.symbols.split("|") if (r.source, s) in span]
-        lo = min((h[0] for h in have), default=None)
-        hi = max((h[1] for h in have), default=None)
-        if lo is None:
-            out.append({**r._asdict(), "gap_from": r.need_from, "gap_to": to})
-            continue
-        if lo > shift(r.need_from, SLACK):
-            out.append({**r._asdict(), "gap_from": r.need_from, "gap_to": lo})
-        if hi < shift(to, -SLACK):
-            out.append({**r._asdict(), "gap_from": hi, "gap_to": to})
-    return pd.DataFrame(out).drop(columns="Index", errors="ignore")
+        cur, used, rejected = r.need_from, False, []
+        for s in filter(None, r.symbols.split("|")):
+            if (r.source, s) not in span:
+                continue
+            first, last = span[(r.source, s)]
+            if last <= cur:
+                continue  # ends before where we are: an earlier listing, irrelevant
+            if first > shift(cur, SLACK):
+                rejected.append(s)
+                continue
+            pm.append({"label": r.label, "cik": r.cik, "source": r.source, "symbol": s, "from": cur,
+                       "to": min(last, to) if last < shift(to, -SLACK) else r.need_to})
+            cur, used = last, True
+            if last >= shift(to, -SLACK):
+                break
+        if cur < shift(to, -SLACK):
+            reason = "no source" if r.source == "none" else "ends early" if used else \
+                "other security on ticker" if rejected else "no data"
+            gp.append({"label": r.label, "cik": r.cik, "source": r.source, "symbols": r.symbols,
+                       "gap_from": cur, "gap_to": to, "reason": reason, "rejected": "|".join(rejected)})
+    cols = ["label", "cik", "source", "symbols", "gap_from", "gap_to", "reason", "rejected"]
+    return pd.DataFrame(pm), pd.DataFrame(gp, columns=cols)
 
 
 def main(out_dir, step):
@@ -301,8 +339,15 @@ def main(out_dir, step):
         z = zipfile.ZipFile(p)
         tiingo = pd.read_csv(io.TextIOWrapper(z.open(z.namelist()[0])), dtype=str)
         al = pd.read_csv(ALIASES, dtype=str, comment="#").groupby("label")["ticker"].apply(list).to_dict()
+        prev = out / "market" / "price_gaps.parquet"  # symbols an earlier build found to be another security
+        rejected = set()
+        if prev.exists():
+            g = pd.read_parquet(prev)
+            if "rejected" in g:
+                rejected = {(r.label, r.source, s) for r in g.itertuples() for s in str(r.rejected).split("|") if s}
+        print(f"plan: {len(rejected)} (security, source, symbol) combinations rejected by the last build")
         pl = plan(pd.read_parquet(out / "market" / "ticker_map.parquet"),
-                  pd.read_parquet(out / "market" / "companies.parquet"), tiingo, al)
+                  pd.read_parquet(out / "market" / "companies.parquet"), tiingo, al, rejected)
         pl.to_parquet(out / "market" / "price_plan.parquet", index=False)
         print(pl.groupby(["index", "source"]).size().to_string())
         return
@@ -325,15 +370,17 @@ def main(out_dir, step):
     elif step == "build":
         n, span = build(out)
         last_day = max((v[1] for (src, _), v in span.items() if src == "yfinance"), default=today())
-        g = gaps(pl, span, last_day)
+        pm, g = coverage(pl, span, last_day)
+        pm.to_parquet(out / "market" / "price_map.parquet", index=False)
         g.to_parquet(out / "market" / "price_gaps.parquet", index=False)
         (out / "review").mkdir(parents=True, exist_ok=True)
         g.to_csv(out / "review" / "price_gaps.csv", index=False)
         per_source = pd.Series([src for src, _ in span]).value_counts().to_dict()
         print(f"prices: {n} rows, symbols per source {per_source}, last day {last_day}")
-        print(f"index stretches without prices: {len(g)}")
+        print(f"validated index stretches: {len(pm)}; without prices: {len(g)} "
+              f"({g['reason'].value_counts().to_dict()})")
         if len(g):
-            print(g[["label", "source", "symbols", "gap_from", "gap_to"]].to_string(index=False))
+            print(g[["label", "source", "symbols", "gap_from", "gap_to", "reason", "rejected"]].to_string(index=False))
     else:
         sys.exit(f"unknown step {step}")
 
