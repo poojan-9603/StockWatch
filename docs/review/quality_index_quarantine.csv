@@ -1,0 +1,46 @@
+check,severity,source,symbol,label,start,end,detail
+move,quarantine,yfinance,AAL,,2020-06-04,2020-06-04,+41% unexplained
+move,quarantine,tiingo,ARG,,2010-02-05,2010-02-05,+40% unexplained
+stale,quarantine,yfinance,AMCR,,2012-05-15,2012-06-06,"16 days at 7.7, volume 0"
+move,quarantine,yfinance,BE,,2020-03-24,2020-03-24,+44% unexplained
+move,quarantine,yfinance,BE,,2024-11-15,2024-11-15,+59% unexplained
+move,quarantine,yfinance,BIIB,,2020-11-04,2020-11-04,+44% unexplained
+move,quarantine,yfinance,CPRI,,2024-10-25,2024-10-25,-49% unexplained
+move,quarantine,yfinance,CVNA,,2022-12-07,2022-12-07,-43% unexplained
+move,quarantine,yfinance,CVNA,,2023-01-12,2023-01-12,+46% unexplained
+move,quarantine,yfinance,ECHO,,2025-06-16,2025-06-16,+49% unexplained
+move,quarantine,yfinance,ECHO,,2025-08-26,2025-08-26,+70% unexplained
+move,quarantine,yfinance,FANG,,2020-03-09,2020-03-09,-45% unexplained
+move,quarantine,tiingo,FRCB,,2023-03-13,2023-03-13,-62% unexplained
+move,quarantine,tiingo,FRCB,,2023-03-20,2023-03-20,-47% unexplained
+move,quarantine,tiingo,FRCB,,2023-04-25,2023-04-25,-49% unexplained
+move,quarantine,tiingo,FRCB,,2023-04-28,2023-04-28,-43% unexplained
+move,quarantine,tiingo,FRCB,,2023-05-03,2023-05-03,-90% unexplained
+move,quarantine,yfinance,FOSL,,2021-01-27,2021-01-27,+87% unexplained
+move,quarantine,yfinance,FOSL,,2024-12-02,2024-12-02,+61% unexplained
+move,quarantine,yfinance,GL,,2024-04-11,2024-04-11,-53% unexplained
+move,quarantine,yfinance,GME,,2020-10-08,2020-10-08,+44% unexplained
+move,quarantine,yfinance,GME,,2021-01-22,2021-01-22,+51% unexplained
+move,quarantine,yfinance,GME,,2021-01-26,2021-01-26,+93% unexplained
+move,quarantine,yfinance,GME,,2021-01-27,2021-01-27,+135% unexplained
+move,quarantine,yfinance,GME,,2021-01-28,2021-01-28,-44% unexplained
+move,quarantine,yfinance,GME,,2021-01-29,2021-01-29,+68% unexplained
+move,quarantine,yfinance,GME,,2021-02-02,2021-02-02,-60% unexplained
+move,quarantine,yfinance,GME,,2021-02-04,2021-02-04,-42% unexplained
+move,quarantine,yfinance,GME,,2021-03-08,2021-03-08,+41% unexplained
+move,quarantine,yfinance,GME,,2024-05-13,2024-05-13,+74% unexplained
+move,quarantine,yfinance,GME,,2024-05-14,2024-05-14,+60% unexplained
+move,quarantine,tiingo,MRO,,2020-03-09,2020-03-09,-47% unexplained
+move,quarantine,yfinance,MRNA,,2026-08-19,2026-08-19,+177% unexplained
+move,quarantine,yfinance,MUR,,2020-03-09,2020-03-09,-42% unexplained
+move,quarantine,yfinance,NCLH,,2020-03-24,2020-03-24,+42% unexplained
+move,quarantine,yfinance,OXY,,2020-03-09,2020-03-09,-53% unexplained
+move,quarantine,yfinance,PBI,,2021-01-26,2021-01-26,+81% unexplained
+move,quarantine,yfinance,RIG,,2020-06-05,2020-06-05,+51% unexplained
+move,quarantine,yfinance,RIG,,2020-06-08,2020-06-08,+50% unexplained
+move,quarantine,yfinance,SMCI,,2018-10-04,2018-10-04,-41% unexplained
+stale,quarantine,yfinance,SW,,2010-01-04,2010-01-29,"19 days at 9.1, volume 0"
+move,quarantine,yfinance,TKO,,2014-05-16,2014-05-16,-43% unexplained
+move,quarantine,yfinance,TRGP,,2020-03-09,2020-03-09,-53% unexplained
+move,quarantine,yfinance,VRTX,,2012-05-07,2012-05-07,+55% unexplained
+move,quarantine,yfinance,VRTX,,2013-04-19,2013-04-19,+62% unexplained
