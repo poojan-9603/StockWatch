@@ -1,0 +1,67 @@
+# M1 step 5: does Nasdaq Data Link's free WIKI Prices (frozen March 2018) cover the dead S&P companies Tiingo misses?
+# Run by hand from the Actions tab. Fetches dates only, computes no returns or signals.
+name: wiki-check
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  wiki:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KEY: ${{ secrets.NASDAQ_DATA_LINK_KEY }}
+    steps:
+      - name: Date coverage per security
+        shell: python
+        run: |
+          import json, os, sys, time, urllib.parse, urllib.request
+          if not os.environ.get("KEY"):
+              sys.exit("::error::secret NASDAQ_DATA_LINK_KEY is missing or empty")
+          # label: (tickers used at the time, first date needed, last date needed). From docs/M1.md step 5.
+          GAPS = {
+              "ACT": (["WPI", "ACT"], "2010-01-04", "2015-03-23"), "APOL": (["APOL"], "2010-01-04", "2013-07-01"),
+              "BIG": (["BIG"], "2010-01-04", "2013-02-14"), "BMC": (["BMC"], "2010-01-04", "2013-09-11"),
+              "BRCM": (["BRCM"], "2010-01-04", "2016-02-01"), "CAM": (["CAM"], "2010-01-04", "2016-04-04"),
+              "CCE": (["CCE"], "2010-10-28", "2016-05-31"), "COG": (["COG"], "2010-01-04", "2021-10-04"),
+              "CVC": (["CVC"], "2010-12-20", "2016-06-21"), "DF": (["DF"], "2010-01-04", "2013-05-24"),
+              "DTV": (["DTV"], "2010-01-04", "2015-07-27"), "FOX": (["FOX"], "2015-09-21", "2019-03-19"),
+              "FOXA": (["NWSA", "FOXA"], "2010-01-04", "2019-03-19"), "HAR": (["HAR"], "2010-01-04", "2017-03-13"),
+              "HFC": (["HFC"], "2018-06-18", "2021-06-04"), "HOT": (["HOT"], "2010-01-04", "2016-09-23"),
+              "IGT": (["IGT"], "2010-01-04", "2014-06-20"), "INFO": (["INFO"], "2017-06-02", "2022-03-02"),
+              "JCP": (["JCP"], "2010-01-04", "2013-12-02"), "LIFE": (["LIFE"], "2010-01-04", "2014-01-24"),
+              "LLL": (["LLL"], "2010-01-04", "2019-07-01"), "LLTC": (["LLTC"], "2010-01-04", "2017-03-13"),
+              "MOLX": (["MOLX"], "2010-01-04", "2013-12-09"), "NE": (["NE"], "2011-01-18", "2015-07-20"),
+              "PCL": (["PCL"], "2010-01-04", "2016-02-22"), "PCP": (["PCP"], "2010-01-04", "2016-02-01"),
+              "TE": (["TE"], "2010-01-04", "2016-07-01"), "TSS": (["TSS"], "2010-01-04", "2019-09-23"),
+              "WIN": (["WIN"], "2010-01-04", "2015-04-07"),
+          }
+
+          def dates(ticker):
+              """All WIKI dates for a ticker, following the datatable cursor. The key goes in the query string."""
+              out, cursor = [], None
+              while True:
+                  q = {"ticker": ticker, "qopts.columns": "date", "api_key": os.environ["KEY"]}
+                  if cursor:
+                      q["qopts.cursor_id"] = cursor
+                  url = "https://data.nasdaq.com/api/v3/datatables/WIKI/PRICES.json?" + urllib.parse.urlencode(q)
+                  with urllib.request.urlopen(url, timeout=60) as r:
+                      d = json.load(r)
+                  out += [row[0] for row in d["datatable"]["data"]]
+                  cursor = d["meta"].get("next_cursor_id")
+                  time.sleep(0.5)  # stay well under the free plan's rate limit
+                  if not cursor:
+                      return out
+
+          full = 0
+          for label, (tickers, need_from, need_to) in GAPS.items():
+              got = sorted(d for t in tickers for d in dates(t))
+              have = (got[0], got[-1]) if got else None
+              # WIKI stops 2018-03-27, so later deaths can only be covered up to then
+              ok = bool(got) and got[0] <= need_from and got[-1] >= min(need_to, "2018-03-27")
+              full += ok
+              print(f"{label:5} tried {tickers}: {len(got)} days {have}, need {need_from} to {need_to}: "
+                    f"{'COVERED' if ok else 'gap'}")
+          print(f"\n{full} of {len(GAPS)} securities covered")
