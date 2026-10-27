@@ -1,0 +1,13 @@
+{
+  "name": "stockwatch-trade-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "wrangler": "^4.153.0"
+  }
+}

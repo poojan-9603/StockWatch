@@ -1,0 +1,10 @@
+# Trade inbox Worker. Cloudflare Access must sit in front of it. Set ACCESS_TEAM_DOMAIN (yourteam.cloudflareaccess.com)
+# and ACCESS_AUD (the Access application's audience tag) in the dashboard or with `wrangler secret put`; without them
+# every request is refused. No account ids or secrets in this file.
+name = "stockwatch-trade"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[[r2_buckets]]
+binding = "INBOX"
+bucket_name = "replace-with-r2-bucket" # set at deploy time to the R2_BUCKET value
