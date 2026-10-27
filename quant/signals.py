@@ -11,7 +11,7 @@ Raw values, higher is better (volatility, issuance and asset growth are negated)
   issuance           minus the 1-year change in shares outstanding, adjusted for splits
   asset_growth       minus the 1-year change in total assets
 Market value is the close times the latest shares outstanding, split-adjusted to the day, and counts as missing when
-the SEC public float contradicts it (float / value outside 0.2 to 1.25). Companies with more than
+the SEC public float contradicts it (float / value on the float date outside 0.2 to 1.25). Companies with more than
 one share class (several cover-page share counts in one filing) get no value or issuance: one class's price times
 all classes' shares would be wrong, and a missing signal counts as 50 instead.
 
@@ -124,8 +124,15 @@ def raw(day, ciks, close, tr, facts, eq, splits, multi):
     mv = (close.loc[day].reindex(ciks) * shares).where(single & (shares > 0))
     # the identity check's float test (pipeline.identity): a market value the SEC's public float contradicts is
     # a bad share count (Fox came out at $0.0bn), so it counts as missing
+    # (priced on the float's own date, as there)
     fl = as_of(facts, day, ["EntityPublicFloat"], annual=False).get("EntityPublicFloat", pd.Series(dtype=float))
-    ratio = fl.reindex(ciks) / mv
+    fl_end = as_of(facts, day, ["EntityPublicFloat"], annual=False, field="end").get(
+        "EntityPublicFloat", pd.Series(dtype=object)).reindex(ciks)
+    hist = close.loc[:day]
+    then = pd.Series({c: hist[c].loc[:e].dropna().iloc[-1] if isinstance(e, str) and c in hist
+                      and hist[c].loc[:e].notna().any() else np.nan for c, e in fl_end.items()})
+    then = then / split_factor(splits, ciks, fl_end, today)  # in today's shares
+    ratio = fl.reindex(ciks) / (then.reindex(ciks) * shares)
     mv = mv.where(ratio.isna() | ratio.between(0.2, 1.25))
     assets = assets.where(assets > 0)
     out = out.assign(gpa=gp / assets, roa=ni / assets, roe=(ni / equity).where(equity > 0), oia=oi / assets,
