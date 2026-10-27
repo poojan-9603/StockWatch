@@ -1,0 +1,122 @@
+# M2 nightly: SEC refresh, prices for the last 14 days, checks, Tiingo spot check, records, backups.
+# Weekdays 01:17 UTC = 8:17 pm CDT / 7:17 pm CST, after the market and SEC's evening bulk rebuild. Odd minute on
+# purpose: GitHub starts crons late under load, and every step is safe to rerun.
+name: nightly
+
+on:
+  schedule:
+    - cron: "17 1 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      first_run:
+        description: "Create db/app.sqlite (only if R2 has none)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: r2-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+      BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Check secrets
+        run: |
+          for v in SEC_USER_AGENT TIINGO_API_KEY BACKUP_DEPLOY_KEY R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Inputs from R2
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          for f in price_plan ticker_map companies; do aws s3 cp "s3://$BUCKET/market/$f.parquet" "out/market/$f.parquet" $r2; done
+          y=$(date -u +%Y); for yy in $((y-1)) $y; do aws s3 sync "s3://$BUCKET/market/prices/year=$yy" "out/market/prices/year=$yy" $r2; done
+          aws s3 sync "s3://$BUCKET/inbox" out/inbox $r2 --exclude "processed/*"
+          aws s3 cp "s3://$BUCKET/backups/monthly/$(date -u +%Y-%m).sqlite" "out/backups/monthly/$(date -u +%Y-%m).sqlite" $r2 || true
+          if aws s3 ls "s3://$BUCKET/db/app.sqlite" $r2 >/dev/null; then
+            aws s3 cp "s3://$BUCKET/db/app.sqlite" out/db/app.sqlite $r2; echo "FIRST=" >> "$GITHUB_ENV"
+          elif [ "${{ inputs.first_run }}" = "true" ]; then echo "FIRST=--first-run" >> "$GITHUB_ENV"
+          else echo "::error::R2 has no db/app.sqlite; run once by hand with first_run"; exit 1; fi
+      - name: SEC refresh (submissions, 8-Ks, fundamentals)
+        id: sec
+        continue-on-error: true
+        run: python -m pipeline.sec out && python -m pipeline.fundamentals out
+      - name: Prices, last 14 days
+        id: prices
+        continue-on-error: true
+        run: python -m pipeline.daily out prices
+      - name: Checks on the new days
+        id: checks
+        continue-on-error: true
+        run: python -m pipeline.daily out checks
+      - name: Spot check against Tiingo
+        id: spot
+        continue-on-error: true
+        run: python -m pipeline.daily out spotcheck
+      - name: Records and backups
+        id: records
+        run: python -m pipeline.backup out nightly $FIRST
+      - name: Save to R2
+        if: always()
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          [ -d out/raw ] && aws s3 sync out/raw "s3://$BUCKET/raw" $r2
+          if [ "${{ steps.prices.outcome }}" = "success" ]; then
+            for d in out/market/prices/year=*; do aws s3 sync "$d" "s3://$BUCKET/market/prices/$(basename "$d")" --delete $r2; done
+          fi
+          if [ "${{ steps.sec.outcome }}" = "success" ]; then
+            for f in companies filings_8k; do aws s3 cp "out/market/$f.parquet" "s3://$BUCKET/market/$f.parquet" $r2; done
+            aws s3 cp out/market/fundamentals/facts.parquet "s3://$BUCKET/market/fundamentals/facts.parquet" $r2
+          fi
+          [ -d out/market/quality ] && aws s3 sync out/market/quality "s3://$BUCKET/market/quality" $r2
+          [ -d out/logs ] && aws s3 sync out/logs "s3://$BUCKET/logs" $r2
+          if [ "${{ steps.records.outcome }}" = "success" ]; then
+            aws s3 cp out/db/app.sqlite "s3://$BUCKET/db/app.sqlite" $r2
+            aws s3 sync out/backups "s3://$BUCKET/backups" $r2
+            for f in out/inbox/*.json; do [ -e "$f" ] && aws s3 mv "s3://$BUCKET/inbox/$(basename "$f")" "s3://$BUCKET/inbox/processed/$(basename "$f")" $r2; done
+            aws s3 ls "s3://$BUCKET/backups/daily/" $r2 | awk '{print $4}' | sort | head -n -30 | \
+              while read k; do aws s3 rm "s3://$BUCKET/backups/daily/$k" $r2; done
+          fi
+      - name: Text export to the backup repo
+        if: steps.records.outcome == 'success'
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$BACKUP_DEPLOY_KEY" > ~/.ssh/backup && chmod 600 ~/.ssh/backup
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/backup -o StrictHostKeyChecking=accept-new"
+          repo=git@github.com:poojan-9603/StockWatchBackups.git
+          git clone -q "$repo" bk 2>/dev/null || { mkdir bk && git -C bk init -q -b main && git -C bk remote add origin "$repo"; }
+          cp out/backup_text/*.csv bk/
+          cd bk && git add -A
+          git diff --cached --quiet || git -c user.name=stockwatch-bot -c user.email=stockwatch-bot@users.noreply.github.com \
+            commit -q -m "records $(date -u +%F)"
+          git push -q origin HEAD:main
+      - name: Run summary
+        if: always()
+        run: |
+          f="out/logs/runs/$(date -u +%F).json"; [ -f "$f" ] && { echo '```json'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          bad=""
+          for s in "sec:${{ steps.sec.outcome }}" "prices:${{ steps.prices.outcome }}" "checks:${{ steps.checks.outcome }}" "spot:${{ steps.spot.outcome }}"; do
+            [ "${s#*:}" = "success" ] || bad="$bad ${s%%:*}"
+          done
+          [ -z "$bad" ] || { echo "::error::failed steps:$bad"; exit 1; }

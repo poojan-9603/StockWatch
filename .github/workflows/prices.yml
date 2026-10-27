@@ -2,13 +2,30 @@
 # WIKI fetches checkpoint per symbol in R2 raw/, so a run cut short continues where it stopped.
 name: prices
 
-on: workflow_dispatch
+on:
+  schedule:
+    - cron: "17 9 * * 6"  # first weekend of the month (gate below)
+  workflow_dispatch:
+
+concurrency:
+  group: r2-writer
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - id: g
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
   prices:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 355
     env:
@@ -55,6 +72,8 @@ jobs:
         timeout-minutes: 120
         run: |
           for step in plan yfinance wiki tiingo build; do python -m pipeline.prices out $step; done
+      - name: Live universe for the month
+        run: python -m pipeline.universe out
       - name: Save raw downloads to R2
         if: always()
         run: |
@@ -68,6 +87,7 @@ jobs:
           aws s3 cp out/market/price_map.parquet "s3://$BUCKET/market/price_map.parquet" $r2
           aws s3 cp out/market/price_gaps.parquet "s3://$BUCKET/market/price_gaps.parquet" $r2
           aws s3 cp out/market/price_identity.parquet "s3://$BUCKET/market/price_identity.parquet" $r2
+          aws s3 sync out/market/universe "s3://$BUCKET/market/universe" $r2
           echo "market/prices in R2: $(aws s3 ls "s3://$BUCKET/market/prices" --recursive --summarize $r2 | tail -2 | tr '\n' ' ')"
       - uses: actions/upload-artifact@v4
         if: always()

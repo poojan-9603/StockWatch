@@ -1,0 +1,53 @@
+# M2 restore test: the newest daily snapshot from R2 must open cleanly, keep its verdict hash chain, and match the text
+# export in the backup repo row for row. Monthly on the first weekend, and by hand.
+name: restore
+
+on:
+  schedule:
+    - cron: "17 12 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - id: g
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+  restore:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Newest snapshot from R2, text export from the backup repo
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          k=$(aws s3 ls "s3://$BUCKET/backups/daily/" $r2 | awk '{print $4}' | sort | tail -1)
+          [ -n "$k" ] || { echo "::error::no daily snapshot in R2"; exit 1; }
+          aws s3 cp "s3://$BUCKET/backups/daily/$k" "out/backups/daily/$k" $r2
+          mkdir -p ~/.ssh && printf '%s\n' "$BACKUP_DEPLOY_KEY" > ~/.ssh/backup && chmod 600 ~/.ssh/backup
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/backup -o StrictHostKeyChecking=accept-new" \
+            git clone -q git@github.com:poojan-9603/StockWatchBackups.git out/backup_text
+      - name: Restore test
+        run: python -m pipeline.backup out restore

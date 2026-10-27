@@ -169,11 +169,11 @@ def rebuild_raw(h):
     }, index=h.index)
 
 
-def fetch_yfinance(out, symbols, batch=100):
-    """Raw batches into raw/yfinance/<today>/. Symbols already fetched today are skipped (a second pass only
-    fetches what the re-plan added)."""
+def fetch_yfinance(out, symbols, batch=100, start=SINCE, folder="yfinance"):
+    """Raw batches into raw/<folder>/<today>/, history from `start`. Symbols already fetched today are skipped (a
+    second pass only fetches what the re-plan added)."""
     import yfinance as yf
-    d = out / "raw" / "yfinance" / today()
+    d = out / "raw" / folder / today()
     d.mkdir(parents=True, exist_ok=True)
     have = set().union(*[set(pd.read_parquet(p, columns=["symbol"])["symbol"]) for p in d.glob("batch_*.parquet")])
     symbols = [s for s in symbols if s not in have]
@@ -183,13 +183,13 @@ def fetch_yfinance(out, symbols, batch=100):
     for i in range(0, len(symbols), batch):
         chunk = symbols[i:i + batch]
         yahoo = [s.replace(".", "-") for s in chunk]
-        w = yf.download(yahoo, start=SINCE, auto_adjust=False, actions=True, group_by="ticker",
+        w = yf.download(yahoo, start=start, auto_adjust=False, actions=True, group_by="ticker",
                         threads=True, progress=False)
         long = w.stack(level=0, future_stack=True).rename_axis(["date", "symbol"]).reset_index()
         long["symbol"] = long["symbol"].str.replace("-", ".")
         empty = [s for s in chunk if long.loc[long["symbol"] == s, "Close"].notna().sum() == 0]
         for s in empty:  # one retry each, alone
-            h = yf.Ticker(s.replace(".", "-")).history(start=SINCE, auto_adjust=False, actions=True)
+            h = yf.Ticker(s.replace(".", "-")).history(start=start, auto_adjust=False, actions=True)
             if len(h):
                 h = h.rename_axis("date").reset_index().assign(symbol=s)
                 long = pd.concat([long[long["symbol"] != s], h], ignore_index=True)
@@ -203,15 +203,16 @@ def fetch_yfinance(out, symbols, batch=100):
     return failed
 
 
-def fetch_tiingo(out, symbols, folder="tiingo"):
-    """Raw Tiingo history per symbol into raw/<folder>/<SYMBOL>.json, skipping files already there."""
+def fetch_tiingo(out, symbols, folder="tiingo", start=SINCE, pause=75):
+    """Raw Tiingo history per symbol into raw/<folder>/<SYMBOL>.json, skipping files already there. pause: seconds
+    between requests (75 keeps a long backfill under 50 an hour; a short daily batch can go faster)."""
     d = out / "raw" / folder
     d.mkdir(parents=True, exist_ok=True)
     todo = [s for s in symbols if not (d / f"{s}.json").exists()]
     print(f"tiingo: {len(symbols)} symbols, {len(todo)} to fetch at about 50 an hour", flush=True)
     for n, s in enumerate(todo):
         for attempt in range(4):
-            r = requests.get(f"https://api.tiingo.com/tiingo/daily/{s}/prices", params={"startDate": SINCE},
+            r = requests.get(f"https://api.tiingo.com/tiingo/daily/{s}/prices", params={"startDate": start},
                              headers={"Authorization": f"Token {os.environ['TIINGO_API_KEY']}"}, timeout=120)
             if r.status_code in (200, 404):
                 break
@@ -222,7 +223,7 @@ def fetch_tiingo(out, symbols, folder="tiingo"):
         body = r.json() if r.status_code == 200 else {"error": r.status_code}
         (d / f"{s}.json").write_text(json.dumps(body))  # raw first; also the checkpoint
         print(f"tiingo {n + 1}/{len(todo)} {s}: {len(body) if isinstance(body, list) else body}", flush=True)
-        time.sleep(75)  # free plan: 50 requests an hour
+        time.sleep(pause)  # free plan: 50 requests an hour
 
 
 def fetch_wiki(out, symbols):
