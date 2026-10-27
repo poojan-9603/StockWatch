@@ -1,0 +1,13 @@
+definition,member_months,share_computable
+quality: gross profit / assets,41984,0.5956
+quality: net income / assets (ROA),41984,0.8656
+quality: net income / equity (ROE),41984,0.8182
+quality: operating income / assets,41984,0.7623
+value: earnings yield (net income / market value),41984,0.8064
+value: book / market,41984,0.8618
+value: sales / market,41984,0.8437
+momentum 12-1,41984,0.944
+low volatility (1 year),41984,0.944
+earnings surprise (8+ quarters of EPS),41984,0.946
+share issuance (1 year),41984,0.9235
+asset growth (1 year),41984,0.9809

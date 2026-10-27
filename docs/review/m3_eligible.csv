@@ -1,0 +1,3 @@
+rule,scored_median,eligible_median,eligible_min,eligible_max,days_under_10,days
+mean,467.0,1.0,0,4,408,408
+rank,467.0,34.0,18,47,0,408

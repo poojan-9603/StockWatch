@@ -1,0 +1,33 @@
+kind,label,member_months
+"priced, unverified vendor series",APOL,6
+"priced, unverified vendor series",BXLT,11
+"priced, unverified vendor series",CPGX,12
+"priced, unverified vendor series",CSRA,28
+"priced, unverified vendor series",DISH,34
+"priced, unverified vendor series",EVHC,22
+"priced, unverified vendor series",FOXA,62
+"priced, unverified vendor series",INFO,9
+"priced, unverified vendor series",PCG,72
+"priced, unverified vendor series",PETM,26
+"priced, unverified vendor series",WCG,16
+unpriced: identity check failed: dividends,AVP,26
+unpriced: identity check failed: dividends,HBI,36
+unpriced: identity check failed: float,DISCA,84
+unpriced: identity check failed: float,LSI,16
+unpriced: no data,BMC,8
+unpriced: no data,MOLX,11
+unpriced: no data,NYX,10
+unpriced: no source,APC,17
+unpriced: no source,CA,8
+unpriced: no source,COG,22
+unpriced: no source,FOXA,12
+unpriced: no source,HBI,22
+unpriced: no source,INFO,22
+unpriced: no source,LIFE,12
+unpriced: no source,LLL,16
+unpriced: no source,MON,3
+unpriced: no source,NFX,11
+unpriced: no source,STI,21
+unpriced: no source,TSS,18
+unpriced: no source,VIAC,1
+unpriced: no source,WRK,22
