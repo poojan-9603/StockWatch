@@ -1,5 +1,5 @@
-# M4: the model comparison on the agent test set (agents.compare). Manual; spends real API money (about $3 to $5,
-# hard stop at agents.compare.BUDGET). Results go to the inbox for the nightly run to add to the database.
+# M4: the model comparison on the agent test set (agents.compare). Manual; spends real API money through the Batch API
+# (likely about $2; refuses up front if the worst case passes agents.compare.BUDGET). Results go to the inbox.
 name: agents-compare
 
 on: workflow_dispatch
@@ -12,7 +12,7 @@ permissions:
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 330
     env:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       BUCKET: ${{ secrets.R2_BUCKET }}
