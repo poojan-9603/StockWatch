@@ -55,3 +55,19 @@ def test_nightly_backup_then_restore_passes_and_refuses_to_start_empty(tmp_path)
     nightly(tmp_path, first_run=False)
     assert len(list((tmp_path / "backups" / "monthly").glob("*.sqlite"))) == 1
     restore(tmp_path)  # passes: integrity, chain, counts match the export
+
+
+def test_inbox_rejects_wrong_types_instead_of_crashing(tmp_path):
+    con = connect(tmp_path / "app.sqlite")
+    added, _, bad = ingest_inbox(con, {"a.json": {"kind": "buy", "date": "2026-10-01", "symbol": "AAA",
+                                                  "shares": "10", "price": 5.0}})
+    assert added == 0 and "a.json" in bad
+
+
+def test_experiments_are_added_once(tmp_path):
+    from pipeline.db import ingest_experiments
+    con = connect(tmp_path / "app.sqlite")
+    e = {"x.json": {"created_at": "2026-10-27T00:00:00+00:00", "name": "M3 tuning: base", "params": "{}",
+                    "result": "{}", "note": "n"}}
+    assert ingest_experiments(con, e)[:2] == (1, 0)
+    assert ingest_experiments(con, e)[:2] == (0, 1)

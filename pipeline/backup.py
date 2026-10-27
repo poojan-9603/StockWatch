@@ -14,7 +14,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from pipeline.db import TABLES, connect, export_text, ingest_inbox, verify_chain
+from pipeline.db import TABLES, connect, export_text, ingest_experiments, ingest_inbox, verify_chain
 from pipeline.prices import today
 
 
@@ -26,6 +26,9 @@ def nightly(out, first_run):
     con = connect(db)
     files = {p.name: json.loads(p.read_text()) for p in sorted((out / "inbox").glob("*.json"))}
     added, seen, bad = ingest_inbox(con, files)
+    exps = {p.name: json.loads(p.read_text()) for p in sorted((out / "inbox" / "experiments").glob("*.json"))}
+    e_added, _, e_bad = ingest_experiments(con, exps)
+    bad |= {f"experiments/{k}": v for k, v in e_bad.items()}
     counts = export_text(con, out / "backup_text")
     con.close()
     daily = out / "backups" / "daily" / f"{today()}.sqlite"
@@ -35,7 +38,7 @@ def nightly(out, first_run):
     if not monthly.exists():
         monthly.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(db, monthly)
-    print(json.dumps({"inbox_added": added, "inbox_seen": seen, "inbox_rejected": bad, "rows": counts}, indent=1))
+    print(json.dumps({"inbox_added": added, "inbox_seen": seen, "experiments_added": e_added, "inbox_rejected": bad, "rows": counts}, indent=1))
     if bad:
         sys.exit(f"inbox files rejected, left in place for review: {sorted(bad)}")
 

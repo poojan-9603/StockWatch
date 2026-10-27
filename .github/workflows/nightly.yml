@@ -96,6 +96,7 @@ jobs:
             aws s3 cp out/db/app.sqlite "s3://$BUCKET/db/app.sqlite" $r2
             aws s3 sync out/backups "s3://$BUCKET/backups" $r2
             for f in out/inbox/*.json; do [ -e "$f" ] && aws s3 mv "s3://$BUCKET/inbox/$(basename "$f")" "s3://$BUCKET/inbox/processed/$(basename "$f")" $r2; done
+            for f in out/inbox/experiments/*.json; do [ -e "$f" ] && aws s3 mv "s3://$BUCKET/inbox/experiments/$(basename "$f")" "s3://$BUCKET/inbox/processed/experiments/$(basename "$f")" $r2; done
             aws s3 ls "s3://$BUCKET/backups/daily/" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" | awk '{print $4}' | sort | head -n -30 | \
               while read k; do aws s3 rm "s3://$BUCKET/backups/daily/$k" $r2; done
           fi

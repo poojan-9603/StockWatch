@@ -94,12 +94,39 @@ def ingest_inbox(con, files):
         if extra or t.get("kind") not in ("buy", "sell", "deposit", "withdrawal") or not t.get("date"):
             bad[name] = f"bad fields or kind: {sorted(extra) or t.get('kind')}"
             continue
-        if t["kind"] in ("buy", "sell") and not (t.get("symbol") and t.get("shares", 0) > 0 and t.get("price", 0) > 0):
+        num = lambda k: isinstance(t.get(k), (int, float)) and not isinstance(t.get(k), bool)
+        if any(t.get(k) is not None and not num(k) for k in ("cik", "shares", "price", "amount", "fees")):
+            bad[name] = "cik, shares, price, amount and fees must be numbers"
+            continue
+        if t["kind"] in ("buy", "sell") and not (t.get("symbol") and num("shares") and t["shares"] > 0
+                                                  and num("price") and t["price"] > 0):
             bad[name] = "buy and sell need symbol, shares > 0 and price > 0"
             continue
         row = {**{k: t.get(k) for k in TRADE_FIELDS}, "fees": t.get("fees") or 0, "source": "inbox",
                "inbox_file": name, "created_at": now()}
         con.execute(f"INSERT INTO trades ({','.join(row)}) VALUES ({','.join('?' * len(row))})", list(row.values()))
+        added += 1
+    con.commit()
+    return added, seen, bad
+
+
+EXPERIMENT_FIELDS = {"created_at", "name", "params", "result", "note"}
+
+
+def ingest_experiments(con, files):
+    """files: {name: parsed JSON} from inbox/experiments/, written by quant.backtest. Each is added once (an
+    identical created_at, name and params already there counts as seen). Returns (added, seen, rejected)."""
+    added, seen, bad = 0, 0, {}
+    for name, e in sorted(files.items()):
+        if set(e) - EXPERIMENT_FIELDS or not (e.get("created_at") and e.get("name")):
+            bad[name] = "bad fields"
+            continue
+        if con.execute("SELECT 1 FROM experiments WHERE created_at = ? AND name = ? AND params IS ?",
+                       (e["created_at"], e["name"], e.get("params"))).fetchone():
+            seen += 1
+            continue
+        con.execute("INSERT INTO experiments (created_at, name, params, result, note) VALUES (?, ?, ?, ?, ?)",
+                    [e.get(k) for k in ("created_at", "name", "params", "result", "note")])
         added += 1
     con.commit()
     return added, seen, bad

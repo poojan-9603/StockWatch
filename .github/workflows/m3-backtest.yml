@@ -1,0 +1,58 @@
+# M3 signals and backtest on the 2013 to 2019 tuning years (the test-years lock stays on). Manual.
+# Reads market data from R2; writes only the experiment records to inbox/experiments/, which the nightly run adds
+# to the database (one writer).
+name: m3-backtest
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Inputs from R2 (price years 2011 to 2019 only)
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          for f in ticker_map price_map companies filings_8k; do
+            aws s3 cp "s3://$BUCKET/market/$f.parquet" "out/market/$f.parquet" $r2
+          done
+          aws s3 cp "s3://$BUCKET/market/fundamentals/facts.parquet" out/market/fundamentals/facts.parquet $r2
+          aws s3 cp "s3://$BUCKET/market/quality/issues.parquet" out/market/quality/issues.parquet $r2
+          for y in $(seq 2011 2019); do
+            aws s3 sync "s3://$BUCKET/market/prices/year=$y" "out/market/prices/year=$y" $r2
+          done
+      - name: Benchmarks
+        run: python -m quant.backtest out bench
+      - name: Signals and backtest
+        run: python -m quant.backtest out run
+      - name: Experiment records to the inbox
+        run: |
+          aws s3 cp out/inbox/experiments "s3://$BUCKET/inbox/experiments" --recursive \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m3-backtest
+          path: |
+            out/review/
+            out/quant/
+            out/inbox/experiments/
+          retention-days: 30

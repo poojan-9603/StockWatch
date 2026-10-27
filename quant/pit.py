@@ -9,10 +9,10 @@ import pandas as pd
 from quant import lock
 
 
-def as_of(facts, day, tags, annual=None, max_age=550):
+def as_of(facts, day, tags, annual=None, max_age=550, field="value"):
     """facts: cik, tag, start, end, value, form, filed. Returns {tag: Series cik -> value} as known on `day`.
     annual: True keeps only ~1-year durations (income and cash flow, from 10-Ks), False only instants (balance
-    sheet), None either."""
+    sheet), None either. field="end" returns each value's period end instead."""
     lock.check([day])
     f = facts[(facts["filed"] <= day) & facts["tag"].isin(tags)]
     if annual is not None:
@@ -21,7 +21,7 @@ def as_of(facts, day, tags, annual=None, max_age=550):
     oldest = (pd.Timestamp(day) - pd.Timedelta(days=max_age)).strftime("%Y-%m-%d")
     f = f[f["end"] >= oldest].sort_values(["end", "filed"])
     last = f.groupby(["cik", "tag"]).tail(1)
-    return {t: g.set_index("cik")["value"] for t, g in last.groupby("tag")}
+    return {t: g.set_index("cik")[field] for t, g in last.groupby("tag")}
 
 
 def first_available(found, chain):
