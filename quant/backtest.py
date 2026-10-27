@@ -31,7 +31,7 @@ from quant.sectors import gics11
 
 START = "2013-01-31"
 FAILED_PENALTY = 0.30
-BASE = dict(rebalance="weekly", choice={"quality": "roa", "value": "bm"}, rule="mean", buy=80.0, n60=5, sell=40.0,
+BASE = dict(rebalance="weekly", choice={"quality": "roa", "value": "bm"}, rule="rank", buy=80.0, n60=5, sell=40.0,
             strikes=2, max_pos=20, avg=1 / 15, min_w=0.02, cap_x=1.5, cap=0.15, sector_cap=0.30, swap=20.0,
             cost=0.001, filter="soft", vix=20.0, soft_raise=5.0, soft_size=0.5, timing=False, nudge=False, stop=False)
 
@@ -353,7 +353,7 @@ def variations():
         b = {"rebalance": reb}
         v |= {f"{reb}: no market filter": b | {"filter": "none"}, f"{reb}: hard market filter": b | {"filter": "hard"},
               f"{reb}: timing layer": b | {"timing": True}, f"{reb}: score nudge": b | {"nudge": True},
-              f"{reb}: volatility stop": b | {"stop": True}, f"{reb}: score re-ranked": b | {"rule": "rank"}}
+              f"{reb}: volatility stop": b | {"stop": True}, f"{reb}: score as plain mean": b | {"rule": "mean"}}
         for sig, cands in sg.CANDIDATES.items():
             for c in cands:
                 if c != BASE["choice"][sig]:
