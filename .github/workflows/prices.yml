@@ -88,7 +88,7 @@ jobs:
           aws s3 cp out/market/price_gaps.parquet "s3://$BUCKET/market/price_gaps.parquet" $r2
           aws s3 cp out/market/price_identity.parquet "s3://$BUCKET/market/price_identity.parquet" $r2
           aws s3 sync out/market/universe "s3://$BUCKET/market/universe" $r2
-          echo "market/prices in R2: $(aws s3 ls "s3://$BUCKET/market/prices" --recursive --summarize $r2 | tail -2 | tr '\n' ' ')"
+          echo "market/prices in R2: $(aws s3 ls "s3://$BUCKET/market/prices" --recursive --summarize --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" | tail -2 | tr '\n' ' ')"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

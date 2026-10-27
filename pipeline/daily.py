@@ -98,11 +98,12 @@ def run_checks(out, log):
     if share < BLOCK_SHARE:
         issues.append(issue("block day", "block", None, None, latest, latest,
                             f"{len(idx & have)} of {len(idx)} index stocks have a price"))
-    weekday = datetime.now(timezone.utc).weekday() < 5
+    # the run starts after midnight UTC; the trading day it's for is the US date (UTC minus 6 hours covers EST/EDT)
+    us_day = datetime.now(timezone.utc) - timedelta(hours=6)
     log.update(checks_latest=latest, checks_index_share=round(share, 4),
                checks=pd.Series([i["severity"] for i in issues]).value_counts().to_dict())
-    if latest < today() and weekday:
-        log["notes"].append(f"no bar for {today()} yet (holiday or vendor delay); latest is {latest}")
+    if latest < us_day.strftime("%Y-%m-%d") and us_day.weekday() < 5:
+        log["notes"].append(f"no bar for {us_day:%Y-%m-%d} (holiday or vendor delay); latest is {latest}")
     (out / "market" / "quality" / "daily").mkdir(parents=True, exist_ok=True)
     pd.DataFrame(issues, columns=["check", "severity", "source", "symbol", "label", "start", "end", "detail"]).to_parquet(
         out / "market" / "quality" / "daily" / f"{today()}.parquet", index=False)

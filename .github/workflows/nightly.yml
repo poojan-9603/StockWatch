@@ -55,7 +55,7 @@ jobs:
           y=$(date -u +%Y); for yy in $((y-1)) $y; do aws s3 sync "s3://$BUCKET/market/prices/year=$yy" "out/market/prices/year=$yy" $r2; done
           aws s3 sync "s3://$BUCKET/inbox" out/inbox $r2 --exclude "processed/*"
           aws s3 cp "s3://$BUCKET/backups/monthly/$(date -u +%Y-%m).sqlite" "out/backups/monthly/$(date -u +%Y-%m).sqlite" $r2 || true
-          if aws s3 ls "s3://$BUCKET/db/app.sqlite" $r2 >/dev/null; then
+          if aws s3 ls "s3://$BUCKET/db/app.sqlite" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" >/dev/null; then
             aws s3 cp "s3://$BUCKET/db/app.sqlite" out/db/app.sqlite $r2; echo "FIRST=" >> "$GITHUB_ENV"
           elif [ "${{ inputs.first_run }}" = "true" ]; then echo "FIRST=--first-run" >> "$GITHUB_ENV"
           else echo "::error::R2 has no db/app.sqlite; run once by hand with first_run"; exit 1; fi
@@ -96,7 +96,7 @@ jobs:
             aws s3 cp out/db/app.sqlite "s3://$BUCKET/db/app.sqlite" $r2
             aws s3 sync out/backups "s3://$BUCKET/backups" $r2
             for f in out/inbox/*.json; do [ -e "$f" ] && aws s3 mv "s3://$BUCKET/inbox/$(basename "$f")" "s3://$BUCKET/inbox/processed/$(basename "$f")" $r2; done
-            aws s3 ls "s3://$BUCKET/backups/daily/" $r2 | awk '{print $4}' | sort | head -n -30 | \
+            aws s3 ls "s3://$BUCKET/backups/daily/" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" | awk '{print $4}' | sort | head -n -30 | \
               while read k; do aws s3 rm "s3://$BUCKET/backups/daily/$k" $r2; done
           fi
       - name: Text export to the backup repo

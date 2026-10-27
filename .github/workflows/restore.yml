@@ -43,7 +43,7 @@ jobs:
       - name: Newest snapshot from R2, text export from the backup repo
         run: |
           r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
-          k=$(aws s3 ls "s3://$BUCKET/backups/daily/" $r2 | awk '{print $4}' | sort | tail -1)
+          k=$(aws s3 ls "s3://$BUCKET/backups/daily/" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" | awk '{print $4}' | sort | tail -1)
           [ -n "$k" ] || { echo "::error::no daily snapshot in R2"; exit 1; }
           aws s3 cp "s3://$BUCKET/backups/daily/$k" "out/backups/daily/$k" $r2
           mkdir -p ~/.ssh && printf '%s\n' "$BACKUP_DEPLOY_KEY" > ~/.ssh/backup && chmod 600 ~/.ssh/backup
