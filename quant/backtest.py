@@ -9,12 +9,11 @@ Prices come only from validated stretches (market/price_map.parquet). A company 
 day (market/quality/issues.parquet). A holding whose prices stop exits at its last close (docs/M3.md).
 
 Usage: python -m quant.backtest OUT_DIR bench|signals|run
-  bench    raw/bench/<date>/ and bench/{SPY,RSP}.parquet, bench/vix.parquet (yfinance, FRED VIXCLS)
+  bench    raw/bench/<date>/ and bench/{SPY,RSP}.parquet, bench/vix.parquet (all from yfinance)
   signals  quant/raw.parquet: every candidate's raw value at every rebalance day; review/m3_ic.csv,
            review/m3_eligible.csv
   run      every variation in variations() -> review/m3_backtest.csv and inbox/experiments/*.json
 """
-import io
 import json
 import sys
 import time
@@ -25,7 +24,6 @@ import numpy as np
 import pandas as pd
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
-import requests
 
 from quant import lock, signals as sg
 from quant.measure import members
@@ -69,12 +67,12 @@ def bench(out):
         r = r[r.index < lock.cutoff()]
         r["tr"] = r["split"] * (r["close"] + r["dividend"]) / r["close"].shift() - 1
         r.rename_axis("date").reset_index()[["date", "close", "tr"]].to_parquet(out / "bench" / f"{sym}.parquet")
-    text = retry(lambda: requests.get("https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS", timeout=60,
-                                      headers={"User-Agent": "StockWatch research"}).text)
-    (raw / "VIXCLS.csv").write_text(text)
-    v = pd.read_csv(io.StringIO(text))
-    v.columns = ["date", "vix"]
-    v["vix"] = pd.to_numeric(v["vix"], errors="coerce")
+    # CBOE's VIX close through yfinance: FRED's VIXCLS (the plan's source) timed out from GitHub's runners
+    h = retry(lambda: yf.Ticker("^VIX").history(start="2011-01-01", end=end_day(), auto_adjust=False))
+    if h.empty:
+        raise RuntimeError("yfinance returned nothing for ^VIX")
+    h.to_parquet(raw / "VIX.parquet")
+    v = pd.DataFrame({"date": pd.to_datetime(h.index).strftime("%Y-%m-%d"), "vix": h["Close"].values})
     v[v["date"] < lock.cutoff()].dropna().to_parquet(out / "bench" / "vix.parquet")
     print("bench: SPY, RSP, VIX saved", flush=True)
 
@@ -89,6 +87,11 @@ def load(out):
         filter=(pc.field("year") >= 2011) & (pc.field("date") < lock.cutoff())
         & pc.field("symbol").isin(sorted(set(pm["symbol"])))).to_pandas()
     lock.check(t["date"])
+    # AT&T: yfinance carries the 2022 WarnerMedia spin-off as a 1.324 "split", so our rebuilt dividends before it are
+    # 1.324x what was paid (Tiingo and the SEC agree on the lower amounts, docs/M1.md). Corrected here rather than
+    # mixing in another source's dividends; the only stock where a second source confirmed the gap (docs/M3.md).
+    fix = (t["source"] == "yfinance") & (t["symbol"] == "T") & (t["date"] < "2022-04-11")
+    t.loc[fix, "dividend"] = t.loc[fix, "dividend"] / 1.324
     p = t.merge(pm[["source", "symbol", "cik", "from", "to"]], on=["source", "symbol"])
     p = p[(p["date"] >= p["from"]) & (p["to"].isna() | (p["date"] <= p["to"]))]
     p = p.sort_values(["cik", "date", "from"]).drop_duplicates(["cik", "date"]).reset_index(drop=True)
