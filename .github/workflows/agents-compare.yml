@@ -1,0 +1,49 @@
+# M4: the model comparison on the agent test set (agents.compare). Manual; spends real API money (about $3 to $5,
+# hard stop at agents.compare.BUDGET). Results go to the inbox for the nightly run to add to the database.
+name: agents-compare
+
+on: workflow_dispatch
+
+concurrency: agents-compare
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Test set from R2
+        run: |
+          aws s3 cp "s3://$BUCKET/agents/testset.jsonl" out/agents/testset.jsonl \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - name: Compare
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python -m agents.compare out/agents/testset.jsonl out
+      - name: Experiment records to the inbox
+        run: |
+          aws s3 cp out/inbox/experiments "s3://$BUCKET/inbox/experiments" --recursive \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agents-compare
+          path: out/review/
+          retention-days: 90
