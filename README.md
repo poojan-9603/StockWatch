@@ -9,4 +9,4 @@ Personal stock research app for US stocks. Advice only, never places trades.
 - M2 nightly pipeline and backups: [docs/M2.md](docs/M2.md)
 - M3 signals and the 2013 to 2019 backtest: [docs/M3.md](docs/M3.md)
 
-Status: M0 and M1 done. M2 in its week of scheduled nightly runs. M3 design frozen (tag m3-frozen); the one M3b test run waits for the user's unlock (docs/M3.md). Groundwork for M4 to M6 (agent document checks, holdings and alerts, the trade Worker, the site and its data contract) is built and tested but not deployed.
+Status: M0 and M1 done. M2 in its week of scheduled nightly runs. M3 design frozen (tag m3-frozen). M3b ran once on 2020 to 2026: gate **fail**, 10.6% a year against SPY's 15.1%, 0 of 17 knob changes win (docs/M3.md). Per the plan, the design goes back to the drawing board and the app to paper mode. Groundwork for M4 to M6 (agent document checks, holdings and alerts, the trade Worker, the site and its data contract) is built and tested but not deployed.
