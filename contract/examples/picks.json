@@ -1,0 +1,180 @@
+{
+ "generated_at": "2026-10-27T00:41:00Z",
+ "as_of": "2026-10-26",
+ "market_bad_mood": false,
+ "picks": [
+  {
+   "symbol": "CCC",
+   "cik": 3,
+   "name": "Charlie Sample Corp.",
+   "sector": "Industrials",
+   "verdict": "Buy",
+   "small_cap": false,
+   "catalyst": false,
+   "math": {
+    "score": 84.2,
+    "ranks": {
+     "momentum": 88,
+     "quality": 79,
+     "value": 66,
+     "low_volatility": 72,
+     "earnings_surprise": 85,
+     "issuance": 64,
+     "asset_growth": 70
+    },
+    "signals_present": 7,
+    "signals_above_60": 7,
+    "missing": [],
+    "news_effect": "none",
+    "news_note": null,
+    "gates": {
+     "score": true,
+     "breadth": true,
+     "news": true,
+     "timing": true,
+     "market": true,
+     "room": true
+    },
+    "reasons": [
+     "Score 84 of 100, above the buy line of 80.",
+     "7 of 7 signals above 60. Strongest: momentum 88, earnings surprise 85.",
+     "News check, timing, market filter and room all passed."
+    ]
+   },
+   "panel": {
+    "date": "2026-10-24",
+    "verdict": "Buy",
+    "agrees": true,
+    "confidence": 0.7,
+    "low_confidence": false,
+    "summary": "Filings show backlog growth and the bear found no red flags in the documents.",
+    "claims": [
+     {
+      "side": "for",
+      "text": "Order backlog grew from a year earlier.",
+      "quote": "backlog increased 14 percent year over year",
+      "doc_id": "CCC-10Q-2026Q3",
+      "doc_title": "CCC 10-Q, third quarter",
+      "doc_date": "2026-10-20",
+      "tier": "filing"
+     }
+    ],
+    "claims_removed": 0
+   },
+   "horizon": "3 to 9 months (momentum-led)",
+   "review_date": "2027-01-25",
+   "size_pct": 6.5,
+   "flags": []
+  },
+  {
+   "symbol": "DDD",
+   "cik": 4,
+   "name": "Delta Example Inc.",
+   "sector": "Health Care",
+   "verdict": "Wait",
+   "small_cap": true,
+   "catalyst": false,
+   "math": {
+    "score": 74.0,
+    "ranks": {
+     "momentum": 70,
+     "quality": 81,
+     "value": 77,
+     "low_volatility": 58,
+     "earnings_surprise": 62,
+     "issuance": 66,
+     "asset_growth": null
+    },
+    "signals_present": 6,
+    "signals_above_60": 5,
+    "missing": [
+     "asset_growth: latest balance sheet not yet filed"
+    ],
+    "news_effect": "none",
+    "news_note": null,
+    "gates": {
+     "score": false,
+     "breadth": true,
+     "news": true,
+     "timing": true,
+     "market": true,
+     "room": true
+    },
+    "reasons": [
+     "Score 74 of 100, below the buy line of 80.",
+     "5 of 6 present signals above 60.",
+     "Asset growth missing: latest balance sheet not yet filed."
+    ]
+   },
+   "panel": null,
+   "horizon": null,
+   "review_date": null,
+   "size_pct": null,
+   "flags": []
+  },
+  {
+   "symbol": "EEE",
+   "cik": 5,
+   "name": "Echo Placeholder Co.",
+   "sector": "Industrials",
+   "verdict": "Don't buy",
+   "small_cap": false,
+   "catalyst": false,
+   "math": {
+    "score": 81.0,
+    "ranks": {
+     "momentum": 83,
+     "quality": 77,
+     "value": 69,
+     "low_volatility": 64,
+     "earnings_surprise": 74,
+     "issuance": 61,
+     "asset_growth": 62
+    },
+    "signals_present": 7,
+    "signals_above_60": 7,
+    "missing": [],
+    "news_effect": "blocked",
+    "news_note": "8-K item 4.01: change in certifying accountant.",
+    "gates": {
+     "score": true,
+     "breadth": true,
+     "news": false,
+     "timing": true,
+     "market": true,
+     "room": true
+    },
+    "reasons": [
+     "Score 81 of 100, above the buy line.",
+     "Blocked by news: an 8-K reports an auditor change."
+    ]
+   },
+   "panel": {
+    "date": "2026-10-24",
+    "verdict": "Wait",
+    "agrees": false,
+    "confidence": 0.7,
+    "low_confidence": false,
+    "summary": "The auditor change is unexplained in the filing.",
+    "claims": [
+     {
+      "side": "against",
+      "text": "The company changed auditors.",
+      "quote": "dismissed its independent registered public accounting firm",
+      "doc_id": "EEE-8K-2026-10-22",
+      "doc_title": "EEE 8-K, item 4.01",
+      "doc_date": "2026-10-22",
+      "tier": "filing"
+     }
+    ],
+    "claims_removed": 0
+   },
+   "horizon": null,
+   "review_date": null,
+   "size_pct": null,
+   "flags": [
+    "Hidden twin: correlation 0.83 with CCC."
+   ]
+  }
+ ]
+}

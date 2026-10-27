@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Holdings",
+  "description": "holdings.json: how is what I own doing?",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "as_of": {"$ref": "common.schema.json#/$defs/date"},
+    "managed_usd": {"$ref": "common.schema.json#/$defs/usd"},
+    "value_usd": {"description": "Positions plus cash.", "$ref": "common.schema.json#/$defs/usd"},
+    "cash_usd": {"$ref": "common.schema.json#/$defs/usd"},
+    "since": {"description": "Start of the return comparison.", "$ref": "common.schema.json#/$defs/date"},
+    "return_pct": {"type": "number"},
+    "sp500_return_pct": {"type": "number"},
+    "drawdown_pct": {"description": "Below peak, 0 or more.", "type": "number", "minimum": 0},
+    "drawdown_alarm": {"description": "20% below peak: time for a review, never an auto-sell.", "type": "boolean"},
+    "holdings": {
+      "type": "array",
+      "items": {
+        "title": "HoldingRow",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "symbol": {"$ref": "common.schema.json#/$defs/symbol"},
+          "cik": {"$ref": "common.schema.json#/$defs/cik"},
+          "name": {"$ref": "common.schema.json#/$defs/text"},
+          "verdict": {"$ref": "common.schema.json#/$defs/hold_verdict"},
+          "own_pick": {"description": "Bought on my own call, watched the same way.", "type": "boolean"},
+          "shares": {"type": "number", "exclusiveMinimum": 0},
+          "value_usd": {"$ref": "common.schema.json#/$defs/usd"},
+          "weight_pct": {"type": "number", "minimum": 0, "maximum": 100},
+          "target_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 15},
+          "day_change_pct": {"type": "number"},
+          "return_pct": {"type": "number"},
+          "sp500_return_pct": {"description": "S&P 500 over the same period.", "type": "number"},
+          "math": {"$ref": "common.schema.json#/$defs/math"},
+          "panel": {"$ref": "common.schema.json#/$defs/panel_or_null"},
+          "flags": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/text"}}
+        },
+        "required": ["symbol", "cik", "name", "verdict", "own_pick", "shares", "value_usd", "weight_pct", "target_pct", "day_change_pct", "return_pct", "sp500_return_pct", "math", "panel", "flags"]
+      }
+    }
+  },
+  "required": ["generated_at", "as_of", "managed_usd", "value_usd", "cash_usd", "since", "return_pct", "sp500_return_pct", "drawdown_pct", "drawdown_alarm", "holdings"]
+}

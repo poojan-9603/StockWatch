@@ -1,0 +1,158 @@
+{
+ "generated_at": "2026-10-27T00:41:00Z",
+ "as_of": "2026-10-26",
+ "managed_usd": 20000,
+ "value_usd": 20412.5,
+ "cash_usd": 17799.5,
+ "since": "2026-03-02",
+ "return_pct": 2.1,
+ "sp500_return_pct": 3.4,
+ "drawdown_pct": 1.8,
+ "drawdown_alarm": false,
+ "holdings": [
+  {
+   "symbol": "AAA",
+   "cik": 1,
+   "name": "Alpha Example Co.",
+   "verdict": "Hold",
+   "own_pick": false,
+   "shares": 20,
+   "value_usd": 1308.0,
+   "weight_pct": 6.4,
+   "target_pct": 7.0,
+   "day_change_pct": 0.8,
+   "return_pct": 9.0,
+   "sp500_return_pct": 12.0,
+   "math": {
+    "score": 71.4,
+    "ranks": {
+     "momentum": 78,
+     "quality": 74,
+     "value": 52,
+     "low_volatility": 69,
+     "earnings_surprise": 81,
+     "issuance": 63,
+     "asset_growth": 58
+    },
+    "signals_present": 7,
+    "signals_above_60": 5,
+    "missing": [],
+    "news_effect": "none",
+    "news_note": null,
+    "gates": {
+     "score": false,
+     "breadth": false,
+     "news": true,
+     "timing": null,
+     "market": true,
+     "room": true
+    },
+    "reasons": [
+     "Score 71 of 100, above the keep-holding line of 50.",
+     "4 of 7 signals above 60: momentum 78, quality 74, low volatility 69, earnings surprise 81.",
+     "Value 52 and asset growth 58 sit near the middle."
+    ]
+   },
+   "panel": {
+    "date": "2026-10-24",
+    "verdict": "Hold",
+    "agrees": true,
+    "confidence": 0.7,
+    "low_confidence": false,
+    "summary": "Filings describe steady margins and no new debt. Nothing in the documents argues for a change.",
+    "claims": [
+     {
+      "side": "for",
+      "text": "Operating margin held steady across the last four quarters.",
+      "quote": "operating margin was 18.2 percent, consistent with the prior year",
+      "doc_id": "AAA-10Q-2026Q3",
+      "doc_title": "AAA 10-Q, third quarter",
+      "doc_date": "2026-10-21",
+      "tier": "filing"
+     },
+     {
+      "side": "against",
+      "text": "Management named rising input costs as a risk.",
+      "quote": "input costs may continue to rise through next year",
+      "doc_id": "AAA-10Q-2026Q3",
+      "doc_title": "AAA 10-Q, third quarter",
+      "doc_date": "2026-10-21",
+      "tier": "filing"
+     }
+    ],
+    "claims_removed": 0
+   },
+   "flags": []
+  },
+  {
+   "symbol": "BBB",
+   "cik": 2,
+   "name": "Bravo Sample Ltd.",
+   "verdict": "Hold",
+   "own_pick": true,
+   "shares": 15,
+   "value_usd": 1305.0,
+   "weight_pct": 6.4,
+   "target_pct": null,
+   "day_change_pct": -1.2,
+   "return_pct": -6.5,
+   "sp500_return_pct": 2.0,
+   "math": {
+    "score": 46.0,
+    "ranks": {
+     "momentum": 38,
+     "quality": 55,
+     "value": 61,
+     "low_volatility": null,
+     "earnings_surprise": 42,
+     "issuance": 50,
+     "asset_growth": 47
+    },
+    "signals_present": 6,
+    "signals_above_60": 1,
+    "missing": [
+     "low_volatility: price history under one year"
+    ],
+    "news_effect": "none",
+    "news_note": null,
+    "gates": {
+     "score": false,
+     "breadth": false,
+     "news": true,
+     "timing": null,
+     "market": true,
+     "room": true
+    },
+    "reasons": [
+     "Score 46 of 100, between the keep line (about 50) and the sell line (about 40).",
+     "1 of 6 present signals above 60: value 61.",
+     "Low volatility missing: price history under one year since a listing change."
+    ]
+   },
+   "panel": {
+    "date": "2026-10-24",
+    "verdict": "Trim",
+    "agrees": false,
+    "confidence": 0.45,
+    "low_confidence": true,
+    "summary": "The bear case leans on a guidance cut. The judge reran once and the view flipped, so confidence is low.",
+    "claims": [
+     {
+      "side": "against",
+      "text": "Full-year guidance was lowered.",
+      "quote": "we now expect full-year revenue at the low end of our range",
+      "doc_id": "BBB-8K-2026-10-15",
+      "doc_title": "BBB 8-K, item 2.02",
+      "doc_date": "2026-10-15",
+      "tier": "filing"
+     }
+    ],
+    "claims_removed": 1
+   },
+   "flags": [
+    "Own pick.",
+    "One weekly check below 50. Sell consideration needs two below 40."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MonthlyReport",
+  "description": "reports/monthly.json: is it working?",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "as_of": {"$ref": "common.schema.json#/$defs/date"},
+    "month": {"type": "string", "pattern": "^\\d{4}-\\d{2}$"},
+    "mode": {"enum": ["paper", "real"]},
+    "since": {"$ref": "common.schema.json#/$defs/date"},
+    "return_pct": {"description": "After costs, since the start date.", "type": "number"},
+    "sp500_return_pct": {"description": "With dividends.", "type": "number"},
+    "sp500_equal_return_pct": {"type": "number"},
+    "sharpe": {"type": ["number", "null"]},
+    "sp500_sharpe": {"type": ["number", "null"]},
+    "max_drawdown_pct": {"type": "number", "minimum": 0},
+    "sp500_max_drawdown_pct": {"type": "number", "minimum": 0},
+    "winning": {"description": "Beats the S&P 500 after costs, Sharpe at least equal, worst drop at most 1.5 times as deep. null while too early to say.", "type": ["boolean", "null"]},
+    "luck_note": {"description": "How much of the lead or lag is still within luck.", "$ref": "common.schema.json#/$defs/text"},
+    "emergency_brake": {"description": "Worst drop over 1.5 times the S&P 500's and more than 10 points behind.", "type": "boolean"},
+    "turnover_pct": {"type": "number", "minimum": 0},
+    "costs_pct": {"type": "number", "minimum": 0},
+    "slices": {
+      "description": "Tracked separately, for example large caps, small caps (untested), catalyst picks.",
+      "type": "array",
+      "items": {
+        "title": "Slice",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "common.schema.json#/$defs/text"},
+          "positions": {"type": "integer", "minimum": 0},
+          "return_pct": {"type": ["number", "null"]},
+          "sp500_return_pct": {"type": ["number", "null"]}
+        },
+        "required": ["name", "positions", "return_pct", "sp500_return_pct"]
+      }
+    },
+    "panel_record": {
+      "title": "PanelRecord",
+      "description": "The panel earns a vote only if right clearly more often across at least 30 disagreements.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disagreements": {"type": "integer", "minimum": 0},
+        "panel_right": {"type": "integer", "minimum": 0},
+        "math_right": {"type": "integer", "minimum": 0},
+        "vote_earned": {"type": "boolean"}
+      },
+      "required": ["disagreements", "panel_right", "math_right", "vote_earned"]
+    },
+    "alerts_sent": {
+      "description": "Monthly noise report.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "urgent": {"type": "integer", "minimum": 0},
+        "important": {"type": "integer", "minimum": 0},
+        "info": {"type": "integer", "minimum": 0}
+      },
+      "required": ["urgent", "important", "info"]
+    },
+    "llm_usd": {"$ref": "common.schema.json#/$defs/usd"},
+    "llm_cap_usd": {"$ref": "common.schema.json#/$defs/usd"},
+    "notes": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/text"}}
+  },
+  "required": ["generated_at", "as_of", "month", "mode", "since", "return_pct", "sp500_return_pct", "sp500_equal_return_pct", "sharpe", "sp500_sharpe", "max_drawdown_pct", "sp500_max_drawdown_pct", "winning", "luck_note", "emergency_brake", "turnover_pct", "costs_pct", "slices", "panel_record", "alerts_sent", "llm_usd", "llm_cap_usd", "notes"]
+}

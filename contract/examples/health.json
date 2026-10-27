@@ -1,0 +1,68 @@
+{
+ "generated_at": "2026-10-27T00:41:00Z",
+ "as_of": "2026-10-26",
+ "run_id": "nightly-2026-10-26-1",
+ "status": "ok",
+ "summary": "All checks passed. One stock quarantined.",
+ "jobs": [
+  {
+   "name": "Nightly",
+   "last_run": "2026-10-27T00:17:00Z",
+   "ok": true,
+   "note": null
+  },
+  {
+   "name": "Holdings watch",
+   "last_run": "2026-10-26T23:03:00Z",
+   "ok": true,
+   "note": null
+  },
+  {
+   "name": "Weekly",
+   "last_run": "2026-10-25T15:20:00Z",
+   "ok": true,
+   "note": null
+  },
+  {
+   "name": "Monthly",
+   "last_run": "2026-10-04T16:10:00Z",
+   "ok": true,
+   "note": null
+  }
+ ],
+ "checks": [
+  {
+   "name": "Completeness",
+   "outcome": "pass",
+   "detail": ""
+  },
+  {
+   "name": "Price sanity",
+   "outcome": "pass",
+   "detail": ""
+  },
+  {
+   "name": "Big moves explained",
+   "outcome": "quarantine",
+   "detail": "FFF up 46% with no split or 8-K."
+  },
+  {
+   "name": "Cross-source spot check",
+   "outcome": "log",
+   "detail": "1 of 25 closes differed by more than 0.5%."
+  }
+ ],
+ "quarantined": [
+  {
+   "symbol": "FFF",
+   "cik": 6,
+   "reason": "Unexplained 46% move."
+  }
+ ],
+ "llm_month_usd": 3.12,
+ "last_backup": "2026-10-27T00:39:00Z",
+ "last_restore_test": {
+  "date": "2026-10-04",
+  "ok": true
+ }
+}

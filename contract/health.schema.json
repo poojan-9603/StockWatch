@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Health",
+  "description": "health.json: is the app itself working?",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "as_of": {"$ref": "common.schema.json#/$defs/date"},
+    "run_id": {"$ref": "common.schema.json#/$defs/text"},
+    "status": {"description": "blocked: no verdicts today.", "enum": ["ok", "warn", "blocked"]},
+    "summary": {"$ref": "common.schema.json#/$defs/text"},
+    "jobs": {
+      "type": "array",
+      "items": {
+        "title": "Job",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "common.schema.json#/$defs/text"},
+          "last_run": {"anyOf": [{"$ref": "common.schema.json#/$defs/timestamp"}, {"type": "null"}]},
+          "ok": {"type": "boolean"},
+          "note": {"type": ["string", "null"]}
+        },
+        "required": ["name", "last_run", "ok", "note"]
+      }
+    },
+    "checks": {
+      "description": "Quality checks and how each failure was sorted.",
+      "type": "array",
+      "items": {
+        "title": "Check",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"$ref": "common.schema.json#/$defs/text"},
+          "outcome": {"enum": ["pass", "log", "quarantine", "block"]},
+          "detail": {"type": "string"}
+        },
+        "required": ["name", "outcome", "detail"]
+      }
+    },
+    "quarantined": {
+      "type": "array",
+      "items": {
+        "title": "Quarantined",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "symbol": {"$ref": "common.schema.json#/$defs/symbol"},
+          "cik": {"$ref": "common.schema.json#/$defs/cik"},
+          "reason": {"$ref": "common.schema.json#/$defs/text"}
+        },
+        "required": ["symbol", "cik", "reason"]
+      }
+    },
+    "llm_month_usd": {"$ref": "common.schema.json#/$defs/usd"},
+    "last_backup": {"anyOf": [{"$ref": "common.schema.json#/$defs/timestamp"}, {"type": "null"}]},
+    "last_restore_test": {
+      "anyOf": [
+        {
+          "title": "RestoreTest",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "date": {"$ref": "common.schema.json#/$defs/date"},
+            "ok": {"type": "boolean"}
+          },
+          "required": ["date", "ok"]
+        },
+        {"type": "null"}
+      ]
+    }
+  },
+  "required": ["generated_at", "as_of", "run_id", "status", "summary", "jobs", "checks", "quarantined", "llm_month_usd", "last_backup", "last_restore_test"]
+}

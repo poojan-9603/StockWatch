@@ -1,0 +1,797 @@
+{
+ "generated_at": "2026-10-27T00:41:00Z",
+ "as_of": "2026-10-26",
+ "symbol": "AAA",
+ "cik": 1,
+ "name": "Alpha Example Co.",
+ "sector": "Consumer Staples",
+ "verdict": "Hold",
+ "own_pick": false,
+ "math": {
+  "score": 71.4,
+  "ranks": {
+   "momentum": 78,
+   "quality": 74,
+   "value": 52,
+   "low_volatility": 69,
+   "earnings_surprise": 81,
+   "issuance": 63,
+   "asset_growth": 58
+  },
+  "signals_present": 7,
+  "signals_above_60": 5,
+  "missing": [],
+  "news_effect": "none",
+  "news_note": null,
+  "gates": {
+   "score": false,
+   "breadth": false,
+   "news": true,
+   "timing": null,
+   "market": true,
+   "room": true
+  },
+  "reasons": [
+   "Score 71 of 100, above the keep-holding line of 50.",
+   "4 of 7 signals above 60: momentum 78, quality 74, low volatility 69, earnings surprise 81.",
+   "Value 52 and asset growth 58 sit near the middle."
+  ]
+ },
+ "panel": {
+  "date": "2026-10-24",
+  "verdict": "Hold",
+  "agrees": true,
+  "confidence": 0.7,
+  "low_confidence": false,
+  "summary": "Filings describe steady margins and no new debt. Nothing in the documents argues for a change.",
+  "claims": [
+   {
+    "side": "for",
+    "text": "Operating margin held steady across the last four quarters.",
+    "quote": "operating margin was 18.2 percent, consistent with the prior year",
+    "doc_id": "AAA-10Q-2026Q3",
+    "doc_title": "AAA 10-Q, third quarter",
+    "doc_date": "2026-10-21",
+    "tier": "filing"
+   },
+   {
+    "side": "against",
+    "text": "Management named rising input costs as a risk.",
+    "quote": "input costs may continue to rise through next year",
+    "doc_id": "AAA-10Q-2026Q3",
+    "doc_title": "AAA 10-Q, third quarter",
+    "doc_date": "2026-10-21",
+    "tier": "filing"
+   }
+  ],
+  "claims_removed": 0
+ },
+ "flags": [],
+ "horizon": "1 to 3 years (quality-led)",
+ "review_date": "2026-12-01",
+ "shares": 20,
+ "value_usd": 1308.0,
+ "weight_pct": 6.4,
+ "target_pct": 7.0,
+ "cap_pct": 10.5,
+ "return_pct": 9.0,
+ "sp500_return_pct": 12.0,
+ "why_bought": {
+  "date": "2026-03-02",
+  "score": 82.5,
+  "reasons": [
+   "Score 82 of 100.",
+   "6 of 7 signals above 60. Strongest: earnings surprise 88, quality 80."
+  ]
+ },
+ "lots": [
+  {
+   "lot_id": "AAA-2026-03-02",
+   "bought": "2026-03-02",
+   "shares": 12,
+   "cost_per_share": 60.0,
+   "return_pct": 9.0,
+   "long_term_from": "2027-03-03",
+   "long_term": false
+  },
+  {
+   "lot_id": "AAA-2026-05-11",
+   "bought": "2026-05-11",
+   "shares": 8,
+   "cost_per_share": 60.0,
+   "return_pct": 9.0,
+   "long_term_from": "2027-05-12",
+   "long_term": false
+  }
+ ],
+ "prices": [
+  {
+   "date": "2026-03-02",
+   "close": 61.07
+  },
+  {
+   "date": "2026-03-03",
+   "close": 61.57
+  },
+  {
+   "date": "2026-03-04",
+   "close": 62.01
+  },
+  {
+   "date": "2026-03-05",
+   "close": 62.74
+  },
+  {
+   "date": "2026-03-06",
+   "close": 63.61
+  },
+  {
+   "date": "2026-03-09",
+   "close": 63.99
+  },
+  {
+   "date": "2026-03-10",
+   "close": 63.65
+  },
+  {
+   "date": "2026-03-11",
+   "close": 63.06
+  },
+  {
+   "date": "2026-03-12",
+   "close": 62.69
+  },
+  {
+   "date": "2026-03-13",
+   "close": 62.4
+  },
+  {
+   "date": "2026-03-16",
+   "close": 61.73
+  },
+  {
+   "date": "2026-03-17",
+   "close": 60.72
+  },
+  {
+   "date": "2026-03-18",
+   "close": 59.98
+  },
+  {
+   "date": "2026-03-19",
+   "close": 59.9
+  },
+  {
+   "date": "2026-03-20",
+   "close": 60.19
+  },
+  {
+   "date": "2026-03-23",
+   "close": 60.38
+  },
+  {
+   "date": "2026-03-24",
+   "close": 60.48
+  },
+  {
+   "date": "2026-03-25",
+   "close": 60.96
+  },
+  {
+   "date": "2026-03-26",
+   "close": 61.99
+  },
+  {
+   "date": "2026-03-27",
+   "close": 63.06
+  },
+  {
+   "date": "2026-03-30",
+   "close": 63.63
+  },
+  {
+   "date": "2026-03-31",
+   "close": 63.74
+  },
+  {
+   "date": "2026-04-01",
+   "close": 63.9
+  },
+  {
+   "date": "2026-04-02",
+   "close": 64.21
+  },
+  {
+   "date": "2026-04-03",
+   "close": 64.17
+  },
+  {
+   "date": "2026-04-06",
+   "close": 63.44
+  },
+  {
+   "date": "2026-04-07",
+   "close": 62.4
+  },
+  {
+   "date": "2026-04-08",
+   "close": 61.67
+  },
+  {
+   "date": "2026-04-09",
+   "close": 61.36
+  },
+  {
+   "date": "2026-04-10",
+   "close": 61.04
+  },
+  {
+   "date": "2026-04-13",
+   "close": 60.5
+  },
+  {
+   "date": "2026-04-14",
+   "close": 60.14
+  },
+  {
+   "date": "2026-04-15",
+   "close": 60.43
+  },
+  {
+   "date": "2026-04-16",
+   "close": 61.25
+  },
+  {
+   "date": "2026-04-17",
+   "close": 62.04
+  },
+  {
+   "date": "2026-04-20",
+   "close": 62.5
+  },
+  {
+   "date": "2026-04-21",
+   "close": 62.97
+  },
+  {
+   "date": "2026-04-22",
+   "close": 63.8
+  },
+  {
+   "date": "2026-04-23",
+   "close": 64.67
+  },
+  {
+   "date": "2026-04-24",
+   "close": 64.97
+  },
+  {
+   "date": "2026-04-27",
+   "close": 64.58
+  },
+  {
+   "date": "2026-04-28",
+   "close": 64.01
+  },
+  {
+   "date": "2026-04-29",
+   "close": 63.7
+  },
+  {
+   "date": "2026-04-30",
+   "close": 63.38
+  },
+  {
+   "date": "2026-05-01",
+   "close": 62.62
+  },
+  {
+   "date": "2026-05-04",
+   "close": 61.58
+  },
+  {
+   "date": "2026-05-05",
+   "close": 60.9
+  },
+  {
+   "date": "2026-05-06",
+   "close": 60.88
+  },
+  {
+   "date": "2026-05-07",
+   "close": 61.15
+  },
+  {
+   "date": "2026-05-08",
+   "close": 61.28
+  },
+  {
+   "date": "2026-05-11",
+   "close": 61.39
+  },
+  {
+   "date": "2026-05-12",
+   "close": 61.97
+  },
+  {
+   "date": "2026-05-13",
+   "close": 63.05
+  },
+  {
+   "date": "2026-05-14",
+   "close": 64.08
+  },
+  {
+   "date": "2026-05-15",
+   "close": 64.59
+  },
+  {
+   "date": "2026-05-18",
+   "close": 64.71
+  },
+  {
+   "date": "2026-05-19",
+   "close": 64.94
+  },
+  {
+   "date": "2026-05-20",
+   "close": 65.26
+  },
+  {
+   "date": "2026-05-21",
+   "close": 65.15
+  },
+  {
+   "date": "2026-05-22",
+   "close": 64.35
+  },
+  {
+   "date": "2026-05-25",
+   "close": 63.3
+  },
+  {
+   "date": "2026-05-26",
+   "close": 62.65
+  },
+  {
+   "date": "2026-05-27",
+   "close": 62.36
+  },
+  {
+   "date": "2026-05-28",
+   "close": 61.97
+  },
+  {
+   "date": "2026-05-29",
+   "close": 61.37
+  },
+  {
+   "date": "2026-06-01",
+   "close": 61.05
+  },
+  {
+   "date": "2026-06-02",
+   "close": 61.43
+  },
+  {
+   "date": "2026-06-03",
+   "close": 62.29
+  },
+  {
+   "date": "2026-06-04",
+   "close": 63.0
+  },
+  {
+   "date": "2026-06-05",
+   "close": 63.43
+  },
+  {
+   "date": "2026-06-08",
+   "close": 63.97
+  },
+  {
+   "date": "2026-06-09",
+   "close": 64.88
+  },
+  {
+   "date": "2026-06-10",
+   "close": 65.74
+  },
+  {
+   "date": "2026-06-11",
+   "close": 65.94
+  },
+  {
+   "date": "2026-06-12",
+   "close": 65.5
+  },
+  {
+   "date": "2026-06-15",
+   "close": 65.0
+  },
+  {
+   "date": "2026-06-16",
+   "close": 64.74
+  },
+  {
+   "date": "2026-06-17",
+   "close": 64.38
+  },
+  {
+   "date": "2026-06-18",
+   "close": 63.52
+  },
+  {
+   "date": "2026-06-19",
+   "close": 62.47
+  },
+  {
+   "date": "2026-06-22",
+   "close": 61.86
+  },
+  {
+   "date": "2026-06-23",
+   "close": 61.9
+  },
+  {
+   "date": "2026-06-24",
+   "close": 62.13
+  },
+  {
+   "date": "2026-06-25",
+   "close": 62.2
+  },
+  {
+   "date": "2026-06-26",
+   "close": 62.32
+  },
+  {
+   "date": "2026-06-29",
+   "close": 62.99
+  },
+  {
+   "date": "2026-06-30",
+   "close": 64.12
+  },
+  {
+   "date": "2026-07-01",
+   "close": 65.12
+  },
+  {
+   "date": "2026-07-02",
+   "close": 65.54
+  },
+  {
+   "date": "2026-07-03",
+   "close": 65.69
+  },
+  {
+   "date": "2026-07-06",
+   "close": 65.99
+  },
+  {
+   "date": "2026-07-07",
+   "close": 66.33
+  },
+  {
+   "date": "2026-07-08",
+   "close": 66.13
+  },
+  {
+   "date": "2026-07-09",
+   "close": 65.25
+  },
+  {
+   "date": "2026-07-10",
+   "close": 64.24
+  },
+  {
+   "date": "2026-07-13",
+   "close": 63.65
+  },
+  {
+   "date": "2026-07-14",
+   "close": 63.36
+  },
+  {
+   "date": "2026-07-15",
+   "close": 62.89
+  },
+  {
+   "date": "2026-07-16",
+   "close": 62.26
+  },
+  {
+   "date": "2026-07-17",
+   "close": 62.0
+  },
+  {
+   "date": "2026-07-20",
+   "close": 62.47
+  },
+  {
+   "date": "2026-07-21",
+   "close": 63.32
+  },
+  {
+   "date": "2026-07-22",
+   "close": 63.97
+  },
+  {
+   "date": "2026-07-23",
+   "close": 64.39
+  },
+  {
+   "date": "2026-07-24",
+   "close": 65.01
+  },
+  {
+   "date": "2026-07-27",
+   "close": 65.98
+  },
+  {
+   "date": "2026-07-28",
+   "close": 66.81
+  },
+  {
+   "date": "2026-07-29",
+   "close": 66.92
+  },
+  {
+   "date": "2026-07-30",
+   "close": 66.45
+  },
+  {
+   "date": "2026-07-31",
+   "close": 66.02
+  },
+  {
+   "date": "2026-08-03",
+   "close": 65.8
+  },
+  {
+   "date": "2026-08-04",
+   "close": 65.37
+  },
+  {
+   "date": "2026-08-05",
+   "close": 64.42
+  },
+  {
+   "date": "2026-08-06",
+   "close": 63.36
+  },
+  {
+   "date": "2026-08-07",
+   "close": 62.84
+  },
+  {
+   "date": "2026-08-10",
+   "close": 62.92
+  },
+  {
+   "date": "2026-08-11",
+   "close": 63.1
+  },
+  {
+   "date": "2026-08-12",
+   "close": 63.11
+  },
+  {
+   "date": "2026-08-13",
+   "close": 63.28
+  },
+  {
+   "date": "2026-08-14",
+   "close": 64.04
+  },
+  {
+   "date": "2026-08-17",
+   "close": 65.22
+  },
+  {
+   "date": "2026-08-18",
+   "close": 66.14
+  },
+  {
+   "date": "2026-08-19",
+   "close": 66.51
+  },
+  {
+   "date": "2026-08-20",
+   "close": 66.7
+  },
+  {
+   "date": "2026-08-21",
+   "close": 67.09
+  },
+  {
+   "date": "2026-08-24",
+   "close": 67.42
+  },
+  {
+   "date": "2026-08-25",
+   "close": 67.12
+  },
+  {
+   "date": "2026-08-26",
+   "close": 66.17
+  },
+  {
+   "date": "2026-08-27",
+   "close": 65.2
+  },
+  {
+   "date": "2026-08-28",
+   "close": 64.69
+  },
+  {
+   "date": "2026-08-31",
+   "close": 64.37
+  },
+  {
+   "date": "2026-09-01",
+   "close": 63.81
+  },
+  {
+   "date": "2026-09-02",
+   "close": 63.15
+  },
+  {
+   "date": "2026-09-03",
+   "close": 62.98
+  },
+  {
+   "date": "2026-09-04",
+   "close": 63.52
+  },
+  {
+   "date": "2026-09-07",
+   "close": 64.36
+  },
+  {
+   "date": "2026-09-08",
+   "close": 64.95
+  },
+  {
+   "date": "2026-09-09",
+   "close": 65.36
+  },
+  {
+   "date": "2026-09-10",
+   "close": 66.06
+  },
+  {
+   "date": "2026-09-11",
+   "close": 67.1
+  },
+  {
+   "date": "2026-09-14",
+   "close": 67.88
+  },
+  {
+   "date": "2026-09-15",
+   "close": 67.9
+  },
+  {
+   "date": "2026-09-16",
+   "close": 67.43
+  },
+  {
+   "date": "2026-09-17",
+   "close": 67.07
+  },
+  {
+   "date": "2026-09-18",
+   "close": 66.87
+  },
+  {
+   "date": "2026-09-21",
+   "close": 66.35
+  },
+  {
+   "date": "2026-09-22",
+   "close": 65.33
+  },
+  {
+   "date": "2026-09-23",
+   "close": 64.3
+  },
+  {
+   "date": "2026-09-24",
+   "close": 63.85
+  },
+  {
+   "date": "2026-09-25",
+   "close": 63.95
+  },
+  {
+   "date": "2026-09-28",
+   "close": 64.07
+  },
+  {
+   "date": "2026-09-29",
+   "close": 64.04
+  },
+  {
+   "date": "2026-09-30",
+   "close": 64.27
+  },
+  {
+   "date": "2026-10-01",
+   "close": 65.12
+  },
+  {
+   "date": "2026-10-02",
+   "close": 66.31
+  },
+  {
+   "date": "2026-10-05",
+   "close": 67.18
+  },
+  {
+   "date": "2026-10-06",
+   "close": 67.51
+  },
+  {
+   "date": "2026-10-07",
+   "close": 67.74
+  },
+  {
+   "date": "2026-10-08",
+   "close": 68.2
+  },
+  {
+   "date": "2026-10-09",
+   "close": 68.5
+  },
+  {
+   "date": "2026-10-12",
+   "close": 68.1
+  },
+  {
+   "date": "2026-10-13",
+   "close": 67.11
+  },
+  {
+   "date": "2026-10-14",
+   "close": 66.19
+  },
+  {
+   "date": "2026-10-15",
+   "close": 65.73
+  },
+  {
+   "date": "2026-10-16",
+   "close": 65.38
+  },
+  {
+   "date": "2026-10-19",
+   "close": 64.74
+  },
+  {
+   "date": "2026-10-20",
+   "close": 64.07
+  },
+  {
+   "date": "2026-10-21",
+   "close": 63.98
+  },
+  {
+   "date": "2026-10-22",
+   "close": 64.6
+  },
+  {
+   "date": "2026-10-23",
+   "close": 65.4
+  }
+ ],
+ "news": [
+  {
+   "date": "2026-10-21",
+   "title": "AAA files quarterly report",
+   "source": "SEC EDGAR",
+   "tier": "filing"
+  }
+ ]
+}

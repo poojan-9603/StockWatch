@@ -1,0 +1,436 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Common",
+  "description": "Pieces shared by the site file schemas.",
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "cik": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9999999999
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9.-]{0,9}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "rank": {
+      "description": "Percentile rank 0 to 100, null when the signal is missing.",
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "buy_verdict": {
+      "title": "BuyVerdict",
+      "enum": [
+        "Buy",
+        "Wait",
+        "Don't buy"
+      ]
+    },
+    "hold_verdict": {
+      "title": "HoldVerdict",
+      "enum": [
+        "Hold",
+        "Add",
+        "Trim",
+        "Sell"
+      ]
+    },
+    "any_verdict": {
+      "title": "AnyVerdict",
+      "enum": [
+        "Buy",
+        "Wait",
+        "Don't buy",
+        "Hold",
+        "Add",
+        "Trim",
+        "Sell"
+      ]
+    },
+    "ranks": {
+      "title": "SignalRanks",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "momentum": {
+          "$ref": "#/$defs/rank"
+        },
+        "quality": {
+          "$ref": "#/$defs/rank"
+        },
+        "value": {
+          "$ref": "#/$defs/rank"
+        },
+        "low_volatility": {
+          "$ref": "#/$defs/rank"
+        },
+        "earnings_surprise": {
+          "$ref": "#/$defs/rank"
+        },
+        "issuance": {
+          "$ref": "#/$defs/rank"
+        },
+        "asset_growth": {
+          "$ref": "#/$defs/rank"
+        }
+      },
+      "required": [
+        "momentum",
+        "quality",
+        "value",
+        "low_volatility",
+        "earnings_surprise",
+        "issuance",
+        "asset_growth"
+      ]
+    },
+    "gates": {
+      "title": "Gates",
+      "description": "The buy rule's checks. true passed, false failed, null not checked (for example a layer the backtest dropped).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "description": "Score 80 or higher.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "breadth": {
+          "description": "At least 5 of 7 signals above 60.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "news": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "timing": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "market": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "room": {
+          "description": "Room in the portfolio (positions, sector cap).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "score",
+        "breadth",
+        "news",
+        "timing",
+        "market",
+        "room"
+      ]
+    },
+    "math": {
+      "title": "MathView",
+      "description": "The verdict's reasoning from code. Reasons are templates filled with real numbers.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "description": "0 to 100, null when fewer than 5 of 7 signals are present.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "ranks": {
+          "$ref": "#/$defs/ranks"
+        },
+        "signals_present": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "signals_above_60": {
+          "description": "Signal agreement.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "missing": {
+          "description": "Missing inputs, in words.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/text"
+          }
+        },
+        "news_effect": {
+          "description": "Whether news changed the verdict, and how.",
+          "enum": [
+            "none",
+            "blocked",
+            "downgraded",
+            "tipped"
+          ]
+        },
+        "news_note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gates": {
+          "$ref": "#/$defs/gates"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/text"
+          }
+        }
+      },
+      "required": [
+        "score",
+        "ranks",
+        "signals_present",
+        "signals_above_60",
+        "missing",
+        "news_effect",
+        "news_note",
+        "gates",
+        "reasons"
+      ]
+    },
+    "claim": {
+      "title": "Claim",
+      "description": "A panel claim whose quote code found in the document.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "side": {
+          "enum": [
+            "for",
+            "against"
+          ]
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "quote": {
+          "$ref": "#/$defs/text"
+        },
+        "doc_id": {
+          "$ref": "#/$defs/text"
+        },
+        "doc_title": {
+          "$ref": "#/$defs/text"
+        },
+        "doc_date": {
+          "$ref": "#/$defs/date"
+        },
+        "tier": {
+          "description": "Source trust tier.",
+          "enum": [
+            "filing",
+            "outlet",
+            "press_release",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "side",
+        "text",
+        "quote",
+        "doc_id",
+        "doc_title",
+        "doc_date",
+        "tier"
+      ]
+    },
+    "panel": {
+      "title": "Panel",
+      "description": "The agent panel's view, shown beside the math. It never sees the score.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "$ref": "#/$defs/date"
+        },
+        "verdict": {
+          "enum": [
+            "Buy",
+            "Wait",
+            "Don't buy",
+            "Hold",
+            "Add",
+            "Trim",
+            "Sell",
+            "Not enough information"
+          ]
+        },
+        "agrees": {
+          "description": "Agrees with the math verdict. null when the panel had not enough information.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "low_confidence": {
+          "description": "A rerun on identical input flipped.",
+          "type": "boolean"
+        },
+        "summary": {
+          "$ref": "#/$defs/text"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/claim"
+          }
+        },
+        "claims_removed": {
+          "description": "Claims dropped because their quote or number failed verification.",
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "date",
+        "verdict",
+        "agrees",
+        "confidence",
+        "low_confidence",
+        "summary",
+        "claims",
+        "claims_removed"
+      ]
+    },
+    "panel_or_null": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/panel"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "alert": {
+      "title": "Alert",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tier": {
+          "enum": [
+            "urgent",
+            "important",
+            "info"
+          ]
+        },
+        "at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/symbol"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cik": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cik"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "$ref": "#/$defs/text"
+        },
+        "body": {
+          "type": "string"
+        },
+        "catalyst": {
+          "description": "Shown as news-driven, not score-backed.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tier",
+        "at",
+        "symbol",
+        "cik",
+        "title",
+        "body",
+        "catalyst"
+      ]
+    },
+    "action": {
+      "title": "Action",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "$ref": "#/$defs/symbol"
+        },
+        "cik": {
+          "$ref": "#/$defs/cik"
+        },
+        "verdict": {
+          "$ref": "#/$defs/any_verdict"
+        },
+        "summary": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "symbol",
+        "cik",
+        "verdict",
+        "summary"
+      ]
+    }
+  }
+}

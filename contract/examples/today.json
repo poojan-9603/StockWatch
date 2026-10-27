@@ -1,0 +1,54 @@
+{
+ "generated_at": "2026-10-27T00:41:00Z",
+ "as_of": "2026-10-26",
+ "status": "quiet",
+ "blocked_reason": null,
+ "market": {
+  "bad_mood": false,
+  "note": "S&P 500 above its 200-day average, volatility normal."
+ },
+ "alerts": [
+  {
+   "tier": "info",
+   "at": "2026-10-26T13:05:00Z",
+   "symbol": "BBB",
+   "cik": 2,
+   "title": "BBB filed an 8-K",
+   "body": "Item 8.01, other events. Read by the panel on the weekend run.",
+   "catalyst": false
+  }
+ ],
+ "actions": [],
+ "quiet": [
+  {
+   "kind": "follow_up",
+   "text": "Wait call on CCC from Sep 28: down 4% since, the S&P 500 up 1%.",
+   "outcome": "hit"
+  },
+  {
+   "kind": "follow_up",
+   "text": "Buy call on AAA from Mar 2: up 9% since, the S&P 500 up 12%.",
+   "outcome": "miss"
+  },
+  {
+   "kind": "holding",
+   "text": "AAA up 0.8% today. Still a Hold, score 71.",
+   "outcome": null
+  },
+  {
+   "kind": "holding",
+   "text": "BBB down 1.2% today. Score 46, one weekly check below 50.",
+   "outcome": null
+  },
+  {
+   "kind": "market",
+   "text": "S&P 500 up 0.3%. Ten-year yield little changed.",
+   "outcome": null
+  },
+  {
+   "kind": "change",
+   "text": "DDD moved from Don't buy to Wait after its earnings filing.",
+   "outcome": null
+  }
+ ]
+}

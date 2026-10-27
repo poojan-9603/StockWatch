@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Today",
+  "description": "today.json: does anything need me today?",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "as_of": {"$ref": "common.schema.json#/$defs/date"},
+    "status": {"description": "blocked: bad data, so no verdicts today.", "enum": ["action", "quiet", "blocked"]},
+    "blocked_reason": {"type": ["string", "null"]},
+    "market": {
+      "title": "Market",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bad_mood": {"description": "S&P 500 below its 200-day average with high volatility.", "type": "boolean"},
+        "note": {"$ref": "common.schema.json#/$defs/text"}
+      },
+      "required": ["bad_mood", "note"]
+    },
+    "alerts": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/alert"}},
+    "actions": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/action"}},
+    "quiet": {
+      "description": "Follow-ups, holdings updates, market news, what changed. Never a nudge to act.",
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "title": "QuietItem",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {"enum": ["follow_up", "holding", "market", "change"]},
+          "text": {"$ref": "common.schema.json#/$defs/text"},
+          "outcome": {"description": "For a past call checked: hit or miss.", "enum": ["hit", "miss", null]}
+        },
+        "required": ["kind", "text", "outcome"]
+      }
+    }
+  },
+  "required": ["generated_at", "as_of", "status", "blocked_reason", "market", "alerts", "actions", "quiet"],
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "blocked"}}},
+      "then": {"properties": {"blocked_reason": {"type": "string", "minLength": 1}, "actions": {"maxItems": 0}}},
+      "else": {"properties": {"blocked_reason": {"type": "null"}}}
+    },
+    {"if": {"properties": {"status": {"const": "quiet"}}}, "then": {"properties": {"actions": {"maxItems": 0}}}},
+    {"if": {"properties": {"status": {"const": "action"}}}, "then": {"properties": {"actions": {"minItems": 1}}}}
+  ]
+}

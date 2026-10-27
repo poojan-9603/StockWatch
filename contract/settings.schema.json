@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Settings",
+  "description": "settings.json: what the app is set to.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "as_of": {"$ref": "common.schema.json#/$defs/date"},
+    "mode": {"enum": ["paper", "real"]},
+    "managed_usd": {"description": "Money the app manages. Sizes are percentages of this.", "$ref": "common.schema.json#/$defs/usd"},
+    "quiet_hours": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {"type": "string", "pattern": "^\\d{2}:\\d{2}$"},
+        "end": {"type": "string", "pattern": "^\\d{2}:\\d{2}$"},
+        "tz": {"$ref": "common.schema.json#/$defs/text"}
+      },
+      "required": ["start", "end", "tz"]
+    },
+    "channels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email": {"type": "boolean"},
+        "discord": {"type": "boolean"}
+      },
+      "required": ["email", "discord"]
+    },
+    "snoozed": {
+      "description": "Per-holding snooze. Urgent alerts still get through.",
+      "type": "array",
+      "items": {
+        "title": "Snooze",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "symbol": {"$ref": "common.schema.json#/$defs/symbol"},
+          "cik": {"$ref": "common.schema.json#/$defs/cik"},
+          "until": {"$ref": "common.schema.json#/$defs/date"}
+        },
+        "required": ["symbol", "cik", "until"]
+      }
+    },
+    "llm_cap_usd": {"$ref": "common.schema.json#/$defs/usd"},
+    "test_years_locked": {"type": "boolean"}
+  },
+  "required": ["generated_at", "as_of", "mode", "managed_usd", "quiet_hours", "channels", "snoozed", "llm_cap_usd", "test_years_locked"]
+}

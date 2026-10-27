@@ -1,0 +1,483 @@
+{
+ "generated_at": "2026-10-27T00:41:00Z",
+ "as_of": "2026-10-26",
+ "symbol": "BBB",
+ "cik": 2,
+ "name": "Bravo Sample Ltd.",
+ "sector": "Technology",
+ "verdict": "Hold",
+ "own_pick": true,
+ "math": {
+  "score": 46.0,
+  "ranks": {
+   "momentum": 38,
+   "quality": 55,
+   "value": 61,
+   "low_volatility": null,
+   "earnings_surprise": 42,
+   "issuance": 50,
+   "asset_growth": 47
+  },
+  "signals_present": 6,
+  "signals_above_60": 1,
+  "missing": [
+   "low_volatility: price history under one year"
+  ],
+  "news_effect": "none",
+  "news_note": null,
+  "gates": {
+   "score": false,
+   "breadth": false,
+   "news": true,
+   "timing": null,
+   "market": true,
+   "room": true
+  },
+  "reasons": [
+   "Score 46 of 100, between the keep line (about 50) and the sell line (about 40).",
+   "1 of 6 present signals above 60: value 61.",
+   "Low volatility missing: price history under one year since a listing change."
+  ]
+ },
+ "panel": {
+  "date": "2026-10-24",
+  "verdict": "Trim",
+  "agrees": false,
+  "confidence": 0.45,
+  "low_confidence": true,
+  "summary": "The bear case leans on a guidance cut. The judge reran once and the view flipped, so confidence is low.",
+  "claims": [
+   {
+    "side": "against",
+    "text": "Full-year guidance was lowered.",
+    "quote": "we now expect full-year revenue at the low end of our range",
+    "doc_id": "BBB-8K-2026-10-15",
+    "doc_title": "BBB 8-K, item 2.02",
+    "doc_date": "2026-10-15",
+    "tier": "filing"
+   }
+  ],
+  "claims_removed": 1
+ },
+ "flags": [
+  "Own pick.",
+  "One weekly check below 50. Sell consideration needs two below 40."
+ ],
+ "horizon": null,
+ "review_date": null,
+ "shares": 15,
+ "value_usd": 1305.0,
+ "weight_pct": 6.4,
+ "target_pct": null,
+ "cap_pct": 10.5,
+ "return_pct": -6.5,
+ "sp500_return_pct": 2.0,
+ "why_bought": null,
+ "lots": [
+  {
+   "lot_id": "BBB-2026-06-15",
+   "bought": "2026-06-15",
+   "shares": 15,
+   "cost_per_share": 93.05,
+   "return_pct": -6.5,
+   "long_term_from": "2027-06-16",
+   "long_term": false
+  }
+ ],
+ "prices": [
+  {
+   "date": "2026-06-15",
+   "close": 98.0
+  },
+  {
+   "date": "2026-06-16",
+   "close": 98.17
+  },
+  {
+   "date": "2026-06-17",
+   "close": 98.5
+  },
+  {
+   "date": "2026-06-18",
+   "close": 99.02
+  },
+  {
+   "date": "2026-06-19",
+   "close": 98.91
+  },
+  {
+   "date": "2026-06-22",
+   "close": 97.72
+  },
+  {
+   "date": "2026-06-23",
+   "close": 96.07
+  },
+  {
+   "date": "2026-06-24",
+   "close": 94.92
+  },
+  {
+   "date": "2026-06-25",
+   "close": 94.3
+  },
+  {
+   "date": "2026-06-26",
+   "close": 93.56
+  },
+  {
+   "date": "2026-06-29",
+   "close": 92.44
+  },
+  {
+   "date": "2026-06-30",
+   "close": 91.69
+  },
+  {
+   "date": "2026-07-01",
+   "close": 91.97
+  },
+  {
+   "date": "2026-07-02",
+   "close": 93.01
+  },
+  {
+   "date": "2026-07-03",
+   "close": 93.95
+  },
+  {
+   "date": "2026-07-06",
+   "close": 94.45
+  },
+  {
+   "date": "2026-07-07",
+   "close": 95.13
+  },
+  {
+   "date": "2026-07-08",
+   "close": 96.39
+  },
+  {
+   "date": "2026-07-09",
+   "close": 97.68
+  },
+  {
+   "date": "2026-07-10",
+   "close": 98.07
+  },
+  {
+   "date": "2026-07-13",
+   "close": 97.45
+  },
+  {
+   "date": "2026-07-14",
+   "close": 96.69
+  },
+  {
+   "date": "2026-07-15",
+   "close": 96.26
+  },
+  {
+   "date": "2026-07-16",
+   "close": 95.68
+  },
+  {
+   "date": "2026-07-17",
+   "close": 94.36
+  },
+  {
+   "date": "2026-07-20",
+   "close": 92.62
+  },
+  {
+   "date": "2026-07-21",
+   "close": 91.48
+  },
+  {
+   "date": "2026-07-22",
+   "close": 91.27
+  },
+  {
+   "date": "2026-07-23",
+   "close": 91.4
+  },
+  {
+   "date": "2026-07-24",
+   "close": 91.29
+  },
+  {
+   "date": "2026-07-27",
+   "close": 91.24
+  },
+  {
+   "date": "2026-07-28",
+   "close": 91.98
+  },
+  {
+   "date": "2026-07-29",
+   "close": 93.48
+  },
+  {
+   "date": "2026-07-30",
+   "close": 94.88
+  },
+  {
+   "date": "2026-07-31",
+   "close": 95.49
+  },
+  {
+   "date": "2026-08-03",
+   "close": 95.68
+  },
+  {
+   "date": "2026-08-04",
+   "close": 96.11
+  },
+  {
+   "date": "2026-08-05",
+   "close": 96.63
+  },
+  {
+   "date": "2026-08-06",
+   "close": 96.41
+  },
+  {
+   "date": "2026-08-07",
+   "close": 95.14
+  },
+  {
+   "date": "2026-08-10",
+   "close": 93.59
+  },
+  {
+   "date": "2026-08-11",
+   "close": 92.58
+  },
+  {
+   "date": "2026-08-12",
+   "close": 91.99
+  },
+  {
+   "date": "2026-08-13",
+   "close": 91.15
+  },
+  {
+   "date": "2026-08-14",
+   "close": 90.02
+  },
+  {
+   "date": "2026-08-17",
+   "close": 89.38
+  },
+  {
+   "date": "2026-08-18",
+   "close": 89.77
+  },
+  {
+   "date": "2026-08-19",
+   "close": 90.77
+  },
+  {
+   "date": "2026-08-20",
+   "close": 91.58
+  },
+  {
+   "date": "2026-08-21",
+   "close": 92.03
+  },
+  {
+   "date": "2026-08-24",
+   "close": 92.78
+  },
+  {
+   "date": "2026-08-25",
+   "close": 94.1
+  },
+  {
+   "date": "2026-08-26",
+   "close": 95.31
+  },
+  {
+   "date": "2026-08-27",
+   "close": 95.55
+  },
+  {
+   "date": "2026-08-28",
+   "close": 94.92
+  },
+  {
+   "date": "2026-08-31",
+   "close": 94.27
+  },
+  {
+   "date": "2026-09-01",
+   "close": 93.92
+  },
+  {
+   "date": "2026-09-02",
+   "close": 93.28
+  },
+  {
+   "date": "2026-09-03",
+   "close": 91.87
+  },
+  {
+   "date": "2026-09-04",
+   "close": 90.19
+  },
+  {
+   "date": "2026-09-07",
+   "close": 89.21
+  },
+  {
+   "date": "2026-09-08",
+   "close": 89.07
+  },
+  {
+   "date": "2026-09-09",
+   "close": 89.12
+  },
+  {
+   "date": "2026-09-10",
+   "close": 88.92
+  },
+  {
+   "date": "2026-09-11",
+   "close": 88.92
+  },
+  {
+   "date": "2026-09-14",
+   "close": 89.77
+  },
+  {
+   "date": "2026-09-15",
+   "close": 91.27
+  },
+  {
+   "date": "2026-09-16",
+   "close": 92.53
+  },
+  {
+   "date": "2026-09-17",
+   "close": 93.04
+  },
+  {
+   "date": "2026-09-18",
+   "close": 93.27
+  },
+  {
+   "date": "2026-09-21",
+   "close": 93.79
+  },
+  {
+   "date": "2026-09-22",
+   "close": 94.29
+  },
+  {
+   "date": "2026-09-23",
+   "close": 93.95
+  },
+  {
+   "date": "2026-09-24",
+   "close": 92.62
+  },
+  {
+   "date": "2026-09-25",
+   "close": 91.18
+  },
+  {
+   "date": "2026-09-28",
+   "close": 90.31
+  },
+  {
+   "date": "2026-09-29",
+   "close": 89.73
+  },
+  {
+   "date": "2026-09-30",
+   "close": 88.8
+  },
+  {
+   "date": "2026-10-01",
+   "close": 87.67
+  },
+  {
+   "date": "2026-10-02",
+   "close": 87.14
+  },
+  {
+   "date": "2026-10-05",
+   "close": 87.62
+  },
+  {
+   "date": "2026-10-06",
+   "close": 88.59
+  },
+  {
+   "date": "2026-10-07",
+   "close": 89.25
+  },
+  {
+   "date": "2026-10-08",
+   "close": 89.69
+  },
+  {
+   "date": "2026-10-09",
+   "close": 90.52
+  },
+  {
+   "date": "2026-10-12",
+   "close": 91.88
+  },
+  {
+   "date": "2026-10-13",
+   "close": 92.98
+  },
+  {
+   "date": "2026-10-14",
+   "close": 93.08
+  },
+  {
+   "date": "2026-10-15",
+   "close": 92.47
+  },
+  {
+   "date": "2026-10-16",
+   "close": 91.94
+  },
+  {
+   "date": "2026-10-19",
+   "close": 91.64
+  },
+  {
+   "date": "2026-10-20",
+   "close": 90.92
+  },
+  {
+   "date": "2026-10-21",
+   "close": 89.44
+  },
+  {
+   "date": "2026-10-22",
+   "close": 87.85
+  },
+  {
+   "date": "2026-10-23",
+   "close": 87.0
+  }
+ ],
+ "news": [
+  {
+   "date": "2026-10-15",
+   "title": "BBB lowers full-year outlook",
+   "source": "SEC EDGAR",
+   "tier": "filing"
+  },
+  {
+   "date": "2026-10-26",
+   "title": "BBB files 8-K, other events",
+   "source": "SEC EDGAR",
+   "tier": "filing"
+  }
+ ]
+}

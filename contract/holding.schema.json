@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Holding",
+  "description": "holding/<cik>.json: should I keep this one?",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "as_of": {"$ref": "common.schema.json#/$defs/date"},
+    "symbol": {"$ref": "common.schema.json#/$defs/symbol"},
+    "cik": {"$ref": "common.schema.json#/$defs/cik"},
+    "name": {"$ref": "common.schema.json#/$defs/text"},
+    "sector": {"$ref": "common.schema.json#/$defs/text"},
+    "verdict": {"$ref": "common.schema.json#/$defs/hold_verdict"},
+    "own_pick": {"type": "boolean"},
+    "math": {"$ref": "common.schema.json#/$defs/math"},
+    "panel": {"$ref": "common.schema.json#/$defs/panel_or_null"},
+    "flags": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/text"}},
+    "horizon": {"type": ["string", "null"]},
+    "review_date": {"anyOf": [{"$ref": "common.schema.json#/$defs/date"}, {"type": "null"}]},
+    "shares": {"type": "number", "exclusiveMinimum": 0},
+    "value_usd": {"$ref": "common.schema.json#/$defs/usd"},
+    "weight_pct": {"type": "number", "minimum": 0, "maximum": 100},
+    "target_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 15},
+    "cap_pct": {"description": "1.5 times the average position, never above 15.", "type": "number", "minimum": 0, "maximum": 15},
+    "return_pct": {"type": "number"},
+    "sp500_return_pct": {"type": "number"},
+    "why_bought": {
+      "description": "Frozen snapshot from the first buy. null for an own pick with no snapshot.",
+      "anyOf": [
+        {
+          "title": "WhyBought",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "date": {"$ref": "common.schema.json#/$defs/date"},
+            "score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+            "reasons": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/text"}}
+          },
+          "required": ["date", "score", "reasons"]
+        },
+        {"type": "null"}
+      ]
+    },
+    "lots": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "title": "Lot",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lot_id": {"$ref": "common.schema.json#/$defs/text"},
+          "bought": {"$ref": "common.schema.json#/$defs/date"},
+          "shares": {"type": "number", "exclusiveMinimum": 0},
+          "cost_per_share": {"type": "number", "exclusiveMinimum": 0},
+          "return_pct": {"type": "number"},
+          "long_term_from": {"description": "One year after the buy. A reminder, not tax advice.", "$ref": "common.schema.json#/$defs/date"},
+          "long_term": {"type": "boolean"}
+        },
+        "required": ["lot_id", "bought", "shares", "cost_per_share", "return_pct", "long_term_from", "long_term"]
+      }
+    },
+    "prices": {
+      "description": "Daily closes for the chart, oldest first.",
+      "type": "array",
+      "items": {
+        "title": "PricePoint",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": {"$ref": "common.schema.json#/$defs/date"},
+          "close": {"type": "number", "exclusiveMinimum": 0}
+        },
+        "required": ["date", "close"]
+      }
+    },
+    "news": {
+      "type": "array",
+      "items": {
+        "title": "NewsItem",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": {"$ref": "common.schema.json#/$defs/date"},
+          "title": {"$ref": "common.schema.json#/$defs/text"},
+          "source": {"$ref": "common.schema.json#/$defs/text"},
+          "tier": {"enum": ["filing", "outlet", "press_release", "other"]}
+        },
+        "required": ["date", "title", "source", "tier"]
+      }
+    }
+  },
+  "required": ["generated_at", "as_of", "symbol", "cik", "name", "sector", "verdict", "own_pick", "math", "panel", "flags", "horizon", "review_date", "shares", "value_usd", "weight_pct", "target_pct", "cap_pct", "return_pct", "sp500_return_pct", "why_bought", "lots", "prices", "news"]
+}

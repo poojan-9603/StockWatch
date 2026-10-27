@@ -1,0 +1,34 @@
+{
+ "generated_at": "2026-10-25T15:20:00Z",
+ "as_of": "2026-10-23",
+ "week_of": "2026-10-19",
+ "summary": "One buy candidate, CCC. Holdings unchanged. No sells.",
+ "actions": [
+  {
+   "symbol": "CCC",
+   "cik": 3,
+   "verdict": "Buy",
+   "summary": "Score 84, all gates passed, 6.5% of managed money."
+  }
+ ],
+ "changes": [
+  "DDD moved from Don't buy to Wait.",
+  "BBB score fell from 52 to 46."
+ ],
+ "disagreements": [
+  {
+   "symbol": "BBB",
+   "cik": 2,
+   "math_verdict": "Hold",
+   "panel_verdict": "Trim",
+   "note": "Panel view is low confidence after a flip on rerun."
+  },
+  {
+   "symbol": "EEE",
+   "cik": 5,
+   "math_verdict": "Don't buy",
+   "panel_verdict": "Wait",
+   "note": "Both lean against buying now."
+  }
+ ]
+}

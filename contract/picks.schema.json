@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Picks",
+  "description": "picks.json: is anything worth buying? An empty list is a normal answer.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "as_of": {"$ref": "common.schema.json#/$defs/date"},
+    "market_bad_mood": {"description": "Buy bar raised and new positions smaller.", "type": "boolean"},
+    "picks": {
+      "type": "array",
+      "items": {
+        "title": "Pick",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "symbol": {"$ref": "common.schema.json#/$defs/symbol"},
+          "cik": {"$ref": "common.schema.json#/$defs/cik"},
+          "name": {"$ref": "common.schema.json#/$defs/text"},
+          "sector": {"$ref": "common.schema.json#/$defs/text"},
+          "verdict": {"$ref": "common.schema.json#/$defs/buy_verdict"},
+          "small_cap": {"description": "Outside the backtested large caps, so untested.", "type": "boolean"},
+          "catalyst": {"description": "News-driven, not score-backed. Max half normal size.", "type": "boolean"},
+          "math": {"$ref": "common.schema.json#/$defs/math"},
+          "panel": {"$ref": "common.schema.json#/$defs/panel_or_null"},
+          "horizon": {"description": "Expected horizon from signal decay, for example 3 to 6 months.", "type": ["string", "null"]},
+          "review_date": {"anyOf": [{"$ref": "common.schema.json#/$defs/date"}, {"type": "null"}]},
+          "size_pct": {"description": "Suggested size, percent of managed money.", "type": ["number", "null"], "minimum": 0, "maximum": 15},
+          "flags": {"description": "Reminders such as a hidden twin or the sector cap.", "type": "array", "items": {"$ref": "common.schema.json#/$defs/text"}}
+        },
+        "required": ["symbol", "cik", "name", "sector", "verdict", "small_cap", "catalyst", "math", "panel", "horizon", "review_date", "size_pct", "flags"],
+        "if": {"properties": {"verdict": {"const": "Buy"}}},
+        "then": {"properties": {"horizon": {"type": "string"}, "review_date": {"type": "string"}, "size_pct": {"type": "number"}}},
+        "else": {"properties": {"size_pct": {"type": "null"}}}
+      }
+    }
+  },
+  "required": ["generated_at", "as_of", "market_bad_mood", "picks"]
+}
