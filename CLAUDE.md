@@ -12,7 +12,7 @@ Personal US stock research app. Advice only, never places trades. Full design in
 
 ## Hard rules
 
-1. **Test years are locked.** Never run backtests, scoring, or any evaluation on data from 2020 onward until I explicitly unlock it. Tuning uses 2013 to 2019 only. The 2020+ test runs exactly once, after the design is frozen.
+1. **Test years are locked.** Never run backtests, tuning, or any evaluation on data from 2020 onward. Tuning uses 2013 to 2019 only. The one 2020+ test (M3b) ran on 2026-10-27 and is never rerun. The one exception is live scoring of the latest day for paper mode and the agent panel (approved 2026-10-27), only inside `quant.lock.live`, which refuses any past day.
 2. **Point in time.** No calculation may use a number before its filing date, or a company outside the universe as of that date. Keep the point-in-time test passing.
 3. **Append-only.** Never UPDATE or DELETE rows in the SQLite records. Corrections are new rows pointing at the old ones.
 4. **One writer.** Only the pipeline writes the database. The site and the Worker never do.

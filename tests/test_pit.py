@@ -48,3 +48,32 @@ def test_test_years_are_locked(monkeypatch):
         raise AssertionError("a 2020 date got through the lock")
     monkeypatch.setenv("STOCKWATCH_UNLOCK_TEST", lock.UNLOCK_PHRASE)
     as_of(FACTS, "2020-01-02", ["Assets"])  # only with the user's unlock
+
+
+def test_live_scoring_allows_only_the_latest_day(monkeypatch):
+    monkeypatch.delenv("STOCKWATCH_UNLOCK_TEST", raising=False)
+    with lock.live("2026-10-26", today="2026-10-28"):
+        as_of(FACTS, "2026-10-26", ["Assets"])
+        lock.check(["2025-06-01", "2026-10-26"])          # its own history is readable
+        assert lock.cutoff() > "2026-10-26"
+        try:
+            lock.check(["2026-10-27"])                    # but nothing after the scored day
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("a date after the live day got through")
+    for day in ["2024-03-01", "2026-10-20", "2026-10-29"]:  # past days and future days are refused
+        try:
+            with lock.live(day, today="2026-10-28"):
+                pass
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError(f"live scoring of {day} was allowed")
+    assert lock.cutoff() == lock.TEST_START               # the lock closes again after the block
+    try:
+        as_of(FACTS, "2026-10-26", ["Assets"])
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("2026 got through outside the live block")
