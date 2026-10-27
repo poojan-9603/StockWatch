@@ -32,7 +32,7 @@ TITLES = {"1.01": r"entry into a material definitive agreement", "1.03": r"bankr
           "5.02": r"departure of directors or (certain )?officers|election of directors|appointment of (certain )?"
                   r"officers|compensatory arrangements of certain officers",
           "8.01": r"other events", "9.01": r"financial statements and exhibits"}
-ITEM = re.compile(r"\bitems?\s*\d{1,2}\s*\.\s*\d{2}\b(?:\s*(?:,|and|&)\s*\d{1,2}\s*\.\s*\d{2}\b)*", re.I)
+ITEM = re.compile(r"\bitems?\s*\d{1,2}\s*\.\s*\d{2}(?!\d)(?:\s*(?:,|and|&)\s*\d{1,2}\s*\.\s*\d{2}(?!\d))*", re.I)
 MASK = "[heading removed]"
 # Looser than the titles, to measure what still gives the label away after masking (headings that skip "Item",
 # shortened titles, or the body saying it outright)

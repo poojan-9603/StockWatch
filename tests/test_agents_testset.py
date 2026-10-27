@@ -85,3 +85,4 @@ def test_mask_removes_item_numbers_and_titles_but_not_amounts():
     assert testset.leaks(raw, "5.02") and not testset.leaks(text, "5.02")
     assert not testset.leaks("EPS was $2.02 and 12.025", "2.02")
     assert testset.leaks("2.02 Results of operations", "2.02")
+    assert testset.mask("Item 2.02Results of Operations and Financial Condition. On") == "[heading removed][heading removed]. On"
