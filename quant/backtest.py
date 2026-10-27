@@ -146,6 +146,11 @@ def build_signals(out, d):
         if i % 25 == 0:
             print(f"  {day}: {len(ciks)} priced members", flush=True)
     raw = pd.concat(frames, ignore_index=True)
+    known = {1652044: "Alphabet", 1067983: "Berkshire", 1754301: "Fox", 1564708: "News Corp", 1166691: "Comcast"}
+    last = raw[raw["date"] == raw["date"].max()].set_index("cik")
+    print("multi-class check, market value in $bn on", raw["date"].max(), {
+        n: round(last.at[c, "mv"] / 1e9, 1) if c in last.index and pd.notna(last.at[c, "mv"]) else None
+        for c, n in known.items()}, flush=True)
     (out / "quant").mkdir(exist_ok=True)
     raw.to_parquet(out / "quant" / "raw.parquet", index=False)
     return raw
@@ -184,9 +189,9 @@ def ic_table(raw, d):
         sec = r["sector"].fillna("Unknown")
         for c in cols:
             rk = r[c].rank(pct=True) if c in sg.PRICE else r[c].groupby(sec).rank(pct=True)
-            rows.append({"date": day, "what": c, "ic": rk.corr(f, method="spearman"), "coverage": r[c].notna().mean()})
+            rows.append({"date": day, "what": c, "ic": rk.rank().corr(f.rank()), "coverage": r[c].notna().mean()})
         s = base[base["date"] == day].set_index("cik")["score"]
-        rows.append({"date": day, "what": "score", "ic": s.corr(f.reindex(s.index), method="spearman"),
+        rows.append({"date": day, "what": "score", "ic": s.rank().corr(f.reindex(s.index).rank()),
                      "coverage": s.notna().mean()})
     t = pd.DataFrame(rows).groupby("what").agg(ic=("ic", "mean"), ic_sd=("ic", "std"), months=("ic", "count"),
                                                 coverage=("coverage", "mean"))
