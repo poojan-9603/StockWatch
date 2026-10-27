@@ -63,7 +63,7 @@ def test_build_fetches_through_sec_get_and_writes_json_lines(tmp_path, monkeypat
     first = lines[0]
     assert set(first) == {"id", "cik", "accession", "filed", "items", "label", "text"}
     assert first["id"] == "8k-" + first["accession"]
-    assert first["text"] == "Item 2.02 Results of Operations\nSee Exhibit 99.1."
+    assert first["text"] == "[heading removed] Results of Operations\nSee Exhibit 99.1."
     acc = first["accession"]
     assert urls[0] == f"https://www.sec.gov/Archives/edgar/data/{first['cik']}/{acc.replace('-', '')}/{acc}.txt"
 
@@ -73,3 +73,15 @@ def test_main_document_needs_an_8k():
         testset.main_document("<DOCUMENT>\n<TYPE>EX-99.1\n<TEXT>x</TEXT>\n</DOCUMENT>")
     plain = "<DOCUMENT>\n<TYPE>8-K\n<TEXT>\nPlain  text​ 8-K\n</TEXT>\n</DOCUMENT>"
     assert testset.main_document(plain) == "Plain text 8-K"
+
+
+def test_mask_removes_item_numbers_and_titles_but_not_amounts():
+    raw = ("ITEM 5.02. Departure of Directors or Certain Officers; Election of Directors\n"
+           "Items 9.01 and 2.02 Results of Operations and Financial Condition. EPS was $2.02.\n"
+           "Item 8.01  Other\n Events")
+    text = testset.mask(raw)
+    assert "5.02" not in text and "2.02 " not in text and "Departure" not in text and "Election" not in text
+    assert "Results of Operations" not in text and "Other" not in text and "$2.02" in text
+    assert testset.leaks(raw, "5.02") and not testset.leaks(text, "5.02")
+    assert not testset.leaks("EPS was $2.02 and 12.025", "2.02")
+    assert testset.leaks("2.02 Results of operations", "2.02")

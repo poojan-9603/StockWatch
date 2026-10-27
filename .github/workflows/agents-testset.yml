@@ -1,0 +1,43 @@
+# M4: build the labeled agent test set (98 8-Ks from 2013 to 2019, item headings masked). Manual.
+# Fetches from SEC through pipeline.sec (User-Agent, rate limit); saves the set to R2 agents/testset.jsonl.
+name: agents-testset
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Build
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          aws s3 cp "s3://$BUCKET/market/filings_8k.parquet" out/market/filings_8k.parquet $r2
+          mkdir -p out/agents
+          python -m agents.testset out/market/filings_8k.parquet out/agents/testset.jsonl
+          aws s3 cp out/agents/testset.jsonl "s3://$BUCKET/agents/testset.jsonl" $r2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agents-testset
+          path: out/agents/
+          retention-days: 90

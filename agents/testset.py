@@ -2,7 +2,7 @@
 
 Only plain 8-Ks filed 2013 to 2019 (hard rule 1) whose one item, besides 9.01 exhibits, is a label below. A fixed
 seed picks the same number of each label. The text is the 8-K document itself (not its exhibits), cleaned to
-visible text, fetched only through pipeline.sec.get (User-Agent and rate limit).
+visible text with item headings masked, fetched only through pipeline.sec.get (User-Agent and rate limit).
 
 Usage: python -m agents.testset FILINGS_8K_PARQUET OUT.jsonl
   writes one JSON line per document: id, cik, accession, filed, items, label, text
@@ -22,7 +22,47 @@ LABELS = {"1.01": "material agreement", "1.03": "bankruptcy or receivership",
           "2.01": "acquisition or disposition completed", "2.02": "results of operations",
           "4.02": "non-reliance on past financial statements",
           "5.02": "director or officer departure or appointment", "8.01": "other events"}
+# Each 8-K heads its sections with the item number and SEC title ("Item 2.02 Results of Operations and Financial
+# Condition"), which would hand a model its label. Both are masked; the body has to carry the answer.
+TITLES = {"1.01": r"entry into a material definitive agreement", "1.03": r"bankruptcy or receivership",
+          "2.01": r"completion of acquisition or disposition of assets",
+          "2.02": r"results of operations and financial condition",
+          "4.02": r"non-?reliance on previously issued financial statements(,? or a related audit report or "
+                  r"completed interim review)?",
+          "5.02": r"departure of directors or (certain )?officers|election of directors|appointment of (certain )?"
+                  r"officers|compensatory arrangements of certain officers",
+          "8.01": r"other events", "9.01": r"financial statements and exhibits"}
+ITEM = re.compile(r"\bitems?\s*\d{1,2}\s*\.\s*\d{2}\b(?:\s*(?:,|and|&)\s*\d{1,2}\s*\.\s*\d{2}\b)*", re.I)
+MASK = "[heading removed]"
+# Looser than the titles, to measure what still gives the label away after masking (headings that skip "Item",
+# shortened titles, or the body saying it outright)
+KEYS = {"1.01": r"material definitive agreement", "1.03": r"bankruptcy|receivership",
+        "2.01": r"completion of (the )?acquisition|disposition of assets", "2.02": r"results of operations",
+        "4.02": r"non-?reliance", "5.02": r"departure of|election of directors|appointment of", "8.01": r"other events"}
 START, END = "2013-01-01", "2020-01-01"
+
+
+def _words(pattern):
+    return re.compile(r"\b(?:" + pattern.replace(" ", r"\s+") + r")\b", re.I)
+
+
+def _title(item):
+    return _words(TITLES[item])
+
+
+def mask(text):
+    """The text with every item number and SEC item title replaced by MASK."""
+    text = ITEM.sub(MASK, text)
+    for item in TITLES:
+        text = _title(item).sub(MASK, text)
+    return text
+
+
+def leaks(text, item):
+    """True if the label's item number (not inside an amount like $2.02 or 12.025) or a key phrase shows."""
+    return bool(re.search(r"(?<![\d.$])" + re.escape(item) + r"(?![\d])", text) or _words(KEYS[item]).search(text))
+
+
 PER_LABEL = 14
 SEED = 20130101
 
@@ -72,12 +112,17 @@ def fetch(cik, accession):
 
 def build(filings, out_path, per_label=PER_LABEL):
     rows = sample(filings, per_label)
+    before = after = 0
     with open(out_path, "w", encoding="utf-8") as out:
         for r in rows.itertuples():
+            raw = fetch(r.cik, r.accession)
+            text = mask(raw)
+            before, after = before + leaks(raw, r.label), after + leaks(text, r.label)
             out.write(json.dumps({"id": f"8k-{r.accession}", "cik": int(r.cik), "accession": r.accession,
                                   "filed": str(r.filed), "items": r.items, "label": r.label,
-                                  "text": fetch(r.cik, r.accession)}) + "\n")
+                                  "text": text}) + "\n")
     print(f"test set: {len(rows)} 8-Ks, {per_label} per label, written to {out_path}")
+    print(f"label's item number or key phrase shows: {before} of {len(rows)} before masking, {after} after")
 
 
 if __name__ == "__main__":
