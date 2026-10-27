@@ -8,11 +8,17 @@ within a year before its prices stop); benchmarks SPY (S&P 500 with dividends) a
 Prices come only from validated stretches (market/price_map.parquet). A company can't be bought on a quarantined
 day (market/quality/issues.parquet). A holding whose prices stop exits at its last close (docs/M3.md).
 
-Usage: python -m quant.backtest OUT_DIR bench|signals|run
+The design is frozen as FROZEN (docs/M3.md, 2026-10-27). M3b runs it once on the test years, with the small knob
+changes in TEST_KNOBS fixed in advance, and only when the user unlocks quant.lock for that run.
+
+Usage: python -m quant.backtest OUT_DIR bench|signals|run|m3b
   bench    raw/bench/<date>/ and bench/{SPY,RSP}.parquet, bench/vix.parquet (all from yfinance)
   signals  quant/raw.parquet: every candidate's raw value at every rebalance day; review/m3_ic.csv,
            review/m3_eligible.csv
   run      every variation in variations() -> review/m3_backtest.csv and inbox/experiments/*.json
+  m3b      unlocked only: FROZEN and TEST_KNOBS from 2020 on -> review/m3b_backtest.csv, review/m3b_ic.csv,
+           review/m3b_gate.json and inbox/experiments/*.json
+  rehearse the m3b code path on tuning data (from REHEARSAL_START, lock on), so the one real run can't fail halfway
 """
 import json
 import sys
@@ -33,7 +39,12 @@ START = "2013-01-31"
 FAILED_PENALTY = 0.30
 BASE = dict(rebalance="weekly", choice={"quality": "roa", "value": "bm"}, rule="rank", buy=80.0, n60=5, sell=40.0,
             strikes=2, max_pos=20, avg=1 / 15, min_w=0.02, cap_x=1.5, cap=0.15, sector_cap=0.30, swap=20.0,
-            cost=0.001, filter="soft", vix=20.0, soft_raise=5.0, soft_size=0.5, timing=False, nudge=False, stop=False)
+            cost=0.001, filter="soft", vix=20.0, soft_raise=5.0, soft_size=0.5, timing=False, nudge=False, stop=False,
+            start=START)
+REHEARSAL_START = "2018-01-01"
+FROZEN = BASE | {"rebalance": "monthly"}  # frozen 2026-10-27: never edit, M3b's verdict is on exactly this
+TEST_KNOBS = {"buy": [75.0, 85.0], "sell": [35.0, 45.0], "n60": [4, 6], "max_pos": [15, 25], "avg": [1 / 12, 1 / 20],
+              "swap": [15.0, 25.0], "cost": [0.002], "vix": [18.0, 25.0], "sector_cap": [0.25, 0.35]}
 
 
 def end_day():
@@ -125,16 +136,16 @@ def load(out):
                 segs=pd.read_parquet(m / "ticker_map.parquet"))
 
 
-def rebalance_days(days, freq):
+def rebalance_days(days, freq, start=START):
     s = pd.Series(days, index=pd.to_datetime(days))
-    s = s[s.index >= START]
+    s = s[s.index >= start]
     key = s.index.to_period("W-FRI" if freq == "weekly" else "M")
     return list(s.groupby(key).last())
 
 
-def build_signals(out, d):
+def build_signals(out, d, start=START):
     days = list(d["close"].index)
-    rdays = sorted(set(rebalance_days(days, "weekly")) | set(rebalance_days(days, "monthly")))
+    rdays = sorted(set(rebalance_days(days, "weekly", start)) | set(rebalance_days(days, "monthly", start)))
     eq, splits, multi = sg.eps_quarters(d["facts"]), sg.splits_table(d["p"]), sg.multi_class(d["facts"])
     print(f"signals: {len(rdays)} days, {len(multi)} multi-class companies", flush=True)
     frames = []
@@ -176,9 +187,9 @@ def forward(d, days):
     return (t.shift(-1) / t - 1).iloc[:-1]
 
 
-def ic_table(raw, d):
+def ic_table(raw, d, start=START):
     """Monthly rank correlation of every candidate (and the score) with the next month's total return."""
-    months = rebalance_days(list(d["close"].index), "monthly")
+    months = rebalance_days(list(d["close"].index), "monthly", start)
     fwd = forward(d, months)
     base = scored(raw[raw["date"].isin(months)], BASE["choice"], "mean")
     cols = [c for v in sg.CANDIDATES.values() for c in v] + [s for s in sg.SIGNALS if s not in sg.CANDIDATES]
@@ -224,14 +235,14 @@ def simulate(d, sc, bench, vix, p):
     """Daily simulation. Holdings are units of each stock's total-return index, so splits and dividends need no
     bookkeeping. Returns (nav Series, stats dict)."""
     tr, tro, close = d["tr"], d["tro"], d["close"]
-    days = [x for x in close.index if x >= START]
+    days = [x for x in close.index if x >= p["start"]]
     tri = (1 + tr.fillna(0)).cumprod()
     tri_open = tri.shift() * (1 + tro)
     ma200, ma50 = tri.rolling(200, min_periods=150).mean(), tri.rolling(50, min_periods=40).mean()
     vol63 = tr.rolling(63, min_periods=50).std()
     spy = bench["SPY"].set_index("date")["close"]
     bad = (spy < spy.rolling(200).mean()) & (vix.set_index("date")["vix"].reindex(spy.index).ffill() > p["vix"])
-    rset = set(rebalance_days(list(close.index), p["rebalance"]))
+    rset = set(rebalance_days(list(close.index), p["rebalance"], p["start"]))
     by_day = {k: g.set_index("cik") for k, g in sc.groupby("date")}
     ended, failed = d["ended"], d["failed"]
     cash, units, strikes, peak = 1.0, {}, {}, {}
@@ -366,7 +377,12 @@ def variations():
     return v
 
 
-def run(out, d, raw):
+def test_variations():
+    """M3b: the frozen design, then each small knob change (PLAN Step 7: the gate must survive them)."""
+    return {"frozen": {}} | {f"{k} = {round(x, 4)}": {k: x} for k, vals in TEST_KNOBS.items() for x in vals}
+
+
+def run(out, d, raw, test=False, start=None):
     bench = {s: pd.read_parquet(out / "bench" / f"{s}.parquet") for s in ["SPY", "RSP"]}
     vix = pd.read_parquet(out / "bench" / "vix.parquet")
     lock.check(list(bench["SPY"]["date"]) + list(vix["date"]))
@@ -374,8 +390,8 @@ def run(out, d, raw):
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     exp = out / "inbox" / "experiments"
     exp.mkdir(parents=True, exist_ok=True)
-    for name, knobs in variations().items():
-        p = BASE | knobs
+    for name, knobs in (test_variations() if test else variations()).items():
+        p = (FROZEN | {"start": start} if test else BASE) | knobs
         key = (json.dumps(p["choice"], sort_keys=True), p["rule"])
         if key not in cache:
             cache[key] = scored(raw, p["choice"], p["rule"])
@@ -391,22 +407,41 @@ def run(out, d, raw):
                            and res["max_drawdown"] >= 1.5 * res["spy_max_drawdown"])
         rows.append({"name": name, **res})
         print(f"{name}: {res}", flush=True)
-        params = {k: v for k, v in p.items()} | {"period": f"{START} to {nav.index[-1]}"}
-        rec = {"created_at": stamp, "name": f"M3 tuning: {name}", "params": json.dumps(params, sort_keys=True),
-               "result": json.dumps(res, sort_keys=True), "note": "2013 to 2019 tuning years, test years locked"}
+        params = {k: v for k, v in p.items()} | {"period": f"{p['start']} to {nav.index[-1]}"}
+        kind = "M3 tuning" if not test else "M3b test" if start == lock.TEST_START else "M3b rehearsal"
+        rec = {"created_at": stamp, "name": f"{kind}: {name}",
+               "params": json.dumps(params, sort_keys=True), "result": json.dumps(res, sort_keys=True),
+               "note": "the one 2020+ test run, design frozen" if kind == "M3b test" else
+               "2013 to 2019 tuning years, test years locked"}
         safe = "".join(ch if ch.isalnum() else "-" for ch in name)
         (exp / f"{stamp[:10]}-{safe}.json").write_text(json.dumps(rec))
-    pd.DataFrame(rows).to_csv(out / "review" / "m3_backtest.csv", index=False)
+    t = pd.DataFrame(rows)
+    t.to_csv(out / "review" / f"{'m3b' if test else 'm3'}_backtest.csv", index=False)
+    if test:
+        knobs = t[t["name"] != "frozen"]
+        gate = {"frozen_wins": bool(t.loc[t["name"] == "frozen", "wins"].iloc[0]),
+                "knob_changes_winning": f"{int(knobs['wins'].sum())} of {len(knobs)}",
+                "period": json.loads(rec["params"])["period"]}
+        gate["gate"] = "pass" if gate["frozen_wins"] and knobs["wins"].all() else "fail"
+        (out / "review" / "m3b_gate.json").write_text(json.dumps(gate, indent=1))
+        print("M3b gate:", json.dumps(gate), flush=True)
 
 
 def main(out_dir, step):
     out = Path(out_dir)
     (out / "review").mkdir(parents=True, exist_ok=True)
+    if step == "m3b" and not lock.unlocked():
+        sys.exit("m3b needs the user's unlock: the test years run once, only when they say so")
     if step == "bench":
         return bench(out)
     d = load(out)
     print(f"loaded {d['close'].shape[1]} companies, {len(d['close'])} days, {len(d['ended'])} series end early, "
           f"{len(d['failed'])} failed, {len(d['blocked'])} quarantined company-days", flush=True)
+    if step in ("m3b", "rehearse"):
+        start = lock.TEST_START if step == "m3b" else REHEARSAL_START
+        raw = build_signals(out, d, start)
+        ic_table(raw, d, start).to_csv(out / "review" / "m3b_ic.csv")
+        return run(out, d, raw, test=True, start=start)
     rawp = out / "quant" / "raw.parquet"
     if step == "signals" or not rawp.exists():
         raw = build_signals(out, d)

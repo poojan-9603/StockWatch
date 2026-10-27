@@ -67,3 +67,20 @@ def test_simulate_buys_at_next_open_and_exits_a_failed_company_at_a_penalty():
     assert stats["exits_failed"] == 1
     assert nav.iloc[0] == 1.0                         # decided at the close, nothing bought yet
     assert nav.loc[last] < nav.loc[days[99]]          # the 30% penalty lands on the last day
+
+
+def test_m3b_refuses_while_the_test_years_are_locked(monkeypatch, tmp_path):
+    monkeypatch.delenv("STOCKWATCH_UNLOCK_TEST", raising=False)
+    try:
+        bt.main(str(tmp_path), "m3b")
+    except SystemExit as e:
+        assert "unlock" in str(e)
+    else:
+        raise AssertionError("m3b ran without the unlock")
+
+
+def test_the_frozen_design_is_the_one_in_docs():
+    assert bt.FROZEN["rebalance"] == "monthly" and bt.FROZEN["rule"] == "rank"
+    assert bt.FROZEN["choice"] == {"quality": "roa", "value": "bm"}
+    assert bt.FROZEN["filter"] == "soft" and not (bt.FROZEN["timing"] or bt.FROZEN["nudge"] or bt.FROZEN["stop"])
+    assert list(bt.test_variations())[0] == "frozen" and len(bt.test_variations()) == 18

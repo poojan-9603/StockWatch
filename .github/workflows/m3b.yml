@@ -1,0 +1,81 @@
+# M3b: the one run of the frozen design on the 2020+ test years (CLAUDE.md hard rule 1).
+# Runs only when dispatched by hand with the unlock phrase from quant/lock.py, only once (R2 m3b/done.json), and
+# only on the code at the m3-frozen tag, so nothing changed after the freeze can touch the result.
+name: m3b
+
+on:
+  workflow_dispatch:
+    inputs:
+      unlock:
+        description: "The unlock phrase from quant/lock.py. Only the user types this, once."
+        required: true
+
+concurrency: m3b
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: m3-frozen
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: Unlock phrase and one-time check
+        env:
+          UNLOCK: ${{ inputs.unlock }}
+        run: |
+          python -c "import os, sys; from quant import lock; sys.exit(0 if os.environ['UNLOCK'] == lock.UNLOCK_PHRASE else 'wrong unlock phrase')"
+          if aws s3 ls "s3://$BUCKET/m3b/done.json" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"; then
+            echo "::error::M3b has already run; the test years are used once"; exit 1
+          fi
+      - name: Inputs from R2 (every price year)
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          for f in ticker_map price_map companies filings_8k; do
+            aws s3 cp "s3://$BUCKET/market/$f.parquet" "out/market/$f.parquet" $r2
+          done
+          aws s3 cp "s3://$BUCKET/market/fundamentals/facts.parquet" out/market/fundamentals/facts.parquet $r2
+          aws s3 cp "s3://$BUCKET/market/quality/issues.parquet" out/market/quality/issues.parquet $r2
+          for y in $(seq 2011 "$(date -u +%Y)"); do
+            aws s3 sync "s3://$BUCKET/market/prices/year=$y" "out/market/prices/year=$y" $r2
+          done
+      - name: Benchmarks
+        env:
+          STOCKWATCH_UNLOCK_TEST: ${{ inputs.unlock }}
+        run: python -m quant.backtest out bench
+      - name: The test run
+        env:
+          STOCKWATCH_UNLOCK_TEST: ${{ inputs.unlock }}
+        run: python -m quant.backtest out m3b
+      - name: Results and the done marker to R2
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          aws s3 cp out/inbox/experiments "s3://$BUCKET/inbox/experiments" --recursive $r2
+          for f in m3b_backtest.csv m3b_ic.csv m3b_gate.json; do aws s3 cp "out/review/$f" "s3://$BUCKET/m3b/$f" $r2; done
+          echo "{\"run\": \"${{ github.run_id }}\", \"sha\": \"$(git rev-parse HEAD)\", \"at\": \"$(date -u +%FT%TZ)\"}" > done.json
+          aws s3 cp done.json "s3://$BUCKET/m3b/done.json" $r2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m3b
+          path: |
+            out/review/
+            out/inbox/experiments/
+          retention-days: 90

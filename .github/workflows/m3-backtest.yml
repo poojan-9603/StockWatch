@@ -3,7 +3,14 @@
 # to the database (one writer).
 name: m3-backtest
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "run (all tuning variations) or rehearse (the M3b code path on 2018 to 2019, lock on)"
+        default: run
+        type: choice
+        options: [run, rehearse]
 
 permissions:
   contents: read
@@ -42,7 +49,7 @@ jobs:
       - name: Benchmarks
         run: python -m quant.backtest out bench
       - name: Signals and backtest
-        run: python -m quant.backtest out run
+        run: python -m quant.backtest out ${{ inputs.step }}
       - name: Experiment records to the inbox
         run: |
           aws s3 cp out/inbox/experiments "s3://$BUCKET/inbox/experiments" --recursive \
