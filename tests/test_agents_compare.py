@@ -52,3 +52,10 @@ def csv_rows(path):
     import csv
     with open(path, newline="") as f:
         yield from csv.DictReader(f)
+
+
+def test_the_pinned_sdk_takes_the_arguments_compare_sends():
+    anthropic = pytest.importorskip("anthropic")  # installed on the runners from requirements.txt
+    import inspect
+    params = inspect.signature(anthropic.resources.messages.Messages.create).parameters
+    assert {"model", "max_tokens", "system", "messages", "output_config"} <= set(params)
