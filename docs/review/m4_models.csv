@@ -1,0 +1,4 @@
+model,correct,right_label,quote_found,not_enough_info,failed,consistent,cost_per_doc,worst_label,worst_label_correct
+claude-haiku-5-5,0.8776,0.8776,1.0,0.0,0.0,1.0,0.0002,8.01,0.7143
+claude-sonnet-5-5,0.898,0.898,1.0,0.0,0.0,0.9898,0.0032,2.02,0.7857
+claude-opus-5-5,0.9592,0.9592,1.0,0.0,0.0,0.9898,0.0063,1.01,0.9286
