@@ -11,6 +11,7 @@ OWNED = ("Hold", "Add", "Trim", "Sell")
 NEI = "Not enough information"
 KEYS = {"verdict", "confidence", "claims"}
 CLAIM_KEYS = {"claim", "quote", "doc_id"}
+SIDES = ("for", "against")
 
 
 class SchemaError(ValueError):
@@ -21,9 +22,10 @@ def _const(c):
     raise SchemaError(f"{c} is not allowed")
 
 
-def parse(raw, doc_ids, owned=None):
+def parse(raw, doc_ids, owned=None, sides=False):
     """The answer as a dict, or SchemaError. doc_ids: the documents the agent was given. owned: True or False limits
-    the verdict to that side's words; None allows either."""
+    the verdict to that side's words; None allows either. sides: each claim also needs "side", "for" or "against"
+    (the judge's claims, as the site shows them)."""
     try:
         a = json.loads(raw, parse_constant=_const)
     except json.JSONDecodeError as e:
@@ -38,9 +40,12 @@ def parse(raw, doc_ids, owned=None):
         raise SchemaError(f"confidence {c!r} must be a number from 0 to 1")
     if not isinstance(a["claims"], list) or (not a["claims"] and a["verdict"] != NEI):
         raise SchemaError("claims must be a list, empty only for 'Not enough information'")
+    keys = CLAIM_KEYS | ({"side"} if sides else set())
     for cl in a["claims"]:
-        if not isinstance(cl, dict) or set(cl) != CLAIM_KEYS:
-            raise SchemaError(f"each claim must have exactly the keys {sorted(CLAIM_KEYS)}")
+        if not isinstance(cl, dict) or set(cl) != keys:
+            raise SchemaError(f"each claim must have exactly the keys {sorted(keys)}")
+        if sides and cl["side"] not in SIDES:
+            raise SchemaError(f"side {cl['side']!r} not one of {SIDES}")
         if not all(isinstance(cl[k], str) and cl[k].strip() for k in CLAIM_KEYS):
             raise SchemaError("claim, quote and doc_id must be non-empty strings")
         if cl["doc_id"] not in doc_ids:

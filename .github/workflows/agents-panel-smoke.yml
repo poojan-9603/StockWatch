@@ -1,0 +1,56 @@
+# M4: one real agent panel run on a stock's latest 8-Ks, to check the prompts and schemas against the live API.
+# Manual; costs a few cents (Haiku readers, Opus judge, Batch API).
+name: agents-panel-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      cik:
+        description: "Company CIK"
+        required: true
+      symbol:
+        description: "Ticker, for labels only"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      CIK: ${{ inputs.cik }}
+      SYMBOL: ${{ inputs.symbol }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - run: python -m pytest -q tests/
+      - name: 8-K list from R2
+        run: |
+          aws s3 cp "s3://$BUCKET/market/filings_8k.parquet" out/market/filings_8k.parquet \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - name: Panel
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          case "$CIK" in *[!0-9]*|"") echo "::error::CIK must be digits"; exit 1;; esac
+          python -m agents.panel out/market/filings_8k.parquet "$CIK" "$SYMBOL" out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: panel-smoke
+          path: out/review/
+          retention-days: 30
