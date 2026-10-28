@@ -1,0 +1,79 @@
+# M5 holdings watch: hourly on weekdays, 7 am to 6 pm Central (monitor.watch). GitHub's cron is UTC and ignores
+# daylight saving, so it fires 12:17 to 00:17 UTC and the job itself skips any hour outside the watch. Shares the
+# r2-writer group with the nightly run, so the two never write the database at once. Manual runs can send a test
+# alert to prove both channels (held in quiet hours, released by the 7 am run).
+name: watch
+
+on:
+  # Off until the six alert secrets are in (docs/M5.md); every scheduled run would fail its secrets check before then.
+  # schedule:
+  #   - cron: "17 12-23 * * 1-5"
+  #   - cron: "17 0 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Also send a test alert on both channels"
+        type: boolean
+        default: true
+
+concurrency:
+  group: r2-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Check secrets
+        run: |
+          for v in SEC_USER_AGENT SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD ALERT_EMAIL_TO DISCORD_WEBHOOK_URL \
+                   R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Within the watch hours?
+        id: due
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "go=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # a crash here fails the step; it must never read as "outside the hours"
+          python -c "from datetime import datetime, timezone; from monitor.watch import due
+          print('go=1' if due(datetime.now(timezone.utc)) else 'go=0')" >> "$GITHUB_OUTPUT"
+          grep -q "go=1" "$GITHUB_OUTPUT" || echo "outside the watch hours; nothing to do"
+      - name: Database from R2
+        id: db
+        if: steps.due.outputs.go == '1'
+        run: |
+          aws s3 cp "s3://$BUCKET/db/app.sqlite" out/db/app.sqlite \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+      - name: Watch
+        if: steps.due.outputs.go == '1'
+        run: python -m monitor.watch out ${{ (github.event_name == 'workflow_dispatch' && inputs.test) && 'test' || '' }}
+      - name: Alert records back to R2
+        if: always() && steps.db.outcome == 'success'
+        run: |
+          aws s3 cp out/db/app.sqlite "s3://$BUCKET/db/app.sqlite" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
