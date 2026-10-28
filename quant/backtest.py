@@ -414,7 +414,8 @@ def run(out, d, raw, test=False, start=None):
                "note": "the one 2020+ test run, design frozen" if kind == "M3b test" else
                "2013 to 2019 tuning years, test years locked"}
         safe = "".join(ch if ch.isalnum() else "-" for ch in name)
-        (exp / f"{stamp[:10]}-{safe}.json").write_text(json.dumps(rec))
+        # the run time in the name: same-day runs must never overwrite each other in the R2 inbox
+        (exp / f"{stamp[:19].replace(':', '')}-{safe}.json").write_text(json.dumps(rec))
     t = pd.DataFrame(rows)
     t.to_csv(out / "review" / f"{'m3b' if test else 'm3'}_backtest.csv", index=False)
     if test:

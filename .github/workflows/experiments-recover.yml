@@ -1,0 +1,46 @@
+# One-off repair: re-send experiment records from earlier runs' artifacts to the R2 inbox under unique names.
+# Same-day runs used to overwrite each other's inbox files (fixed 2026-10-28). The nightly ingest skips records it
+# already has (same created_at, name and params), so re-sending is safe. Manual.
+name: experiments-recover
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Run IDs whose artifacts hold inbox/experiments/*.json, separated by spaces"
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUNS: ${{ inputs.runs }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Collect
+        run: |
+          mkdir -p send
+          for r in $RUNS; do
+            case "$r" in *[!0-9]*|"") echo "::error::not a run ID: $r"; exit 1;; esac
+            gh run download "$r" -R "$GITHUB_REPOSITORY" -D "art/$r" || { echo "::error::no artifacts for run $r"; exit 1; }
+            n=0
+            for f in $(find "art/$r" -path '*inbox/experiments/*.json'); do cp "$f" "send/$r-$(basename "$f")"; n=$((n+1)); done
+            echo "run $r: $n experiment records"
+          done
+          echo "total: $(ls send | wc -l)"
+      - name: Send to the inbox
+        run: |
+          aws s3 cp send "s3://$BUCKET/inbox/experiments" --recursive \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors

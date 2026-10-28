@@ -144,7 +144,7 @@ def main(testset_path, out_dir, client=None):
     for r in t.to_dict("records"):
         params = {"model": r["model"], "runs": RUNS, "effort": EFFORT, "max_tokens": MAX_TOKENS, "batch": True,
                   "documents": len(items)}
-        (exp / f"{now[:10]}-m4-{r['model']}.json").write_text(json.dumps(
+        (exp / f"{now[:19].replace(':', '')}-m4-{r['model']}.json").write_text(json.dumps(
             {"created_at": now, "name": f"M4 model test: {r['model']}", "params": json.dumps(params, sort_keys=True),
              "result": json.dumps(r, sort_keys=True), "note": "8-K event test set, headings masked"}))
 
