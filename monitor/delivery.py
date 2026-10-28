@@ -66,6 +66,8 @@ def deliver(channel, msg):
     """msg: {subject, body} from monitor.alerts.message."""
     if channel == "email":
         send_email(msg["subject"], msg["body"])
+    elif channel == "app":
+        return  # nothing to send: the alerts table is the delivery, and the site's Today screen shows it
     elif channel == "discord":
         send_discord(f"**{msg['subject']}**\n{msg['body']}")
     else:

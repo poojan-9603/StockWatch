@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 CENTRAL = ZoneInfo("America/Chicago")
 TIERS = ("informational", "important", "urgent")
-CHANNELS = ("email", "discord")
+CHANNELS = ("email", "discord")  # the plan's two; monitor.watch picks which are active, and "app" is the site
 FIELDS = ("key", "tier", "severity", "symbol", "subject", "text", "report")
 
 
@@ -51,11 +51,12 @@ def row(a, channel, stamp, status, reason=None, held_id=None):
 
 
 def message(alerts, channel):
-    """One message for a channel: worst first. Email carries full text, Discord points full reports to email."""
+    """One message for a channel: worst first. Email and the app carry full text; Discord points full reports to
+    email."""
     alerts = sorted(alerts, key=rank, reverse=True)
     n = Counter(a["tier"] for a in alerts)
     subject = "StockWatch: " + ", ".join(f"{n[t]} {t}" for t in reversed(TIERS) if n[t])
-    if channel == "email":
+    if channel in ("email", "app"):
         body = "\n\n".join(f"[{a['tier'].upper()}] {a['subject']}\n{a['text']}" for a in alerts)
     else:
         body = "\n".join(f"**{a['tier'].upper()}** {a['subject']}" +
@@ -63,7 +64,7 @@ def message(alerts, channel):
     return {"subject": subject, "body": body}
 
 
-def plan(alerts, past, now, snoozed=None):
+def plan(alerts, past, now, snoozed=None, channels=CHANNELS):
     """alerts: this run's alerts. past: history(con). now: aware datetime. snoozed: {symbol: until (aware datetime)},
     which urgent alerts ignore. Returns {channel: (message or None, rows)}. Deliver each message, then record its rows;
     if delivery fails, record nothing for that channel, so the next run tries again."""
@@ -73,7 +74,7 @@ def plan(alerts, past, now, snoozed=None):
         if a["tier"] not in TIERS:
             raise ValueError(f"unknown tier {a['tier']} on {a['key']}")
     stamp, snoozed, out = now.astimezone(timezone.utc).isoformat(timespec="seconds"), snoozed or {}, {}
-    for ch in CHANNELS:
+    for ch in channels:
         sent, pending, rows, new = {}, {}, [], {}
         for h in (h for h in past if h["channel"] == ch):
             if h["status"] == "sent":

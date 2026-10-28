@@ -1,5 +1,5 @@
 """The holdings watch: its hours, 8-K red flags, 10% drops, no repeats, quiet hours held until 7 am, and loud
-failures that still send what worked."""
+failures that still send what worked. Alerts go to the app only for now (watch.ACTIVE)."""
 import json
 from datetime import datetime
 
@@ -49,16 +49,16 @@ def sources(price=88.0):
     return {"quote": lambda s: (price, 100.0), "submissions": lambda cik: [eightk("a", "2026-10-26", "4.02")]}
 
 
-def test_alerts_go_out_once_on_both_channels(tmp_path):
+def test_alerts_go_to_the_app_once(tmp_path):
     con, sent = setup(tmp_path), []
     deliver = lambda ch, msg: sent.append((ch, msg["subject"]))
     log = watch.run(con, at(2026, 10, 26, 10, 0), deliver=deliver, **sources())
-    assert log["holdings"] == 1 and log["alerts"] == 2 and log["sent"] == {"email": 2, "discord": 2}
-    assert sorted(ch for ch, _ in sent) == ["discord", "email"] and "2 urgent" in sent[0][1]
+    assert log["holdings"] == 1 and log["alerts"] == 2 and log["sent"] == {"app": 2}
+    assert sent == [("app", "StockWatch: 2 urgent")]
     sent.clear()
     log = watch.run(con, at(2026, 10, 26, 11, 0), deliver=deliver, **sources())
-    assert sent == [] and log["sent"] == {"email": 0, "discord": 0}  # repeats are suppressed, still recorded
-    assert con.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 8
+    assert sent == [] and log["sent"] == {"app": 0}  # repeats are suppressed, still recorded
+    assert con.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 4
 
 
 def test_quiet_hours_hold_until_the_7_am_run(tmp_path):
@@ -68,10 +68,11 @@ def test_quiet_hours_hold_until_the_7_am_run(tmp_path):
               submissions=lambda cik: [])
     assert sent == [] and {h["status"] for h in alerts.history(con)} == {"held"}
     watch.run(con, at(2026, 10, 27, 7, 5), deliver=deliver, quote=lambda s: (99.0, 100.0), submissions=lambda c: [])
-    assert sorted(ch for ch, _ in sent) == ["discord", "email"] and all("Test alert" in b for _, b in sent)
+    assert len(sent) == 1 and sent[0][0] == "app" and "Test alert" in sent[0][1]
 
 
-def test_failures_are_loud_but_what_worked_still_goes_out(tmp_path):
+def test_failures_are_loud_but_what_worked_still_goes_out(tmp_path, monkeypatch):
+    monkeypatch.setattr(watch, "ACTIVE", ("email", "discord"))  # the plan's channels, switched back on
     con, sent = setup(tmp_path), []
 
     def deliver(ch, msg):

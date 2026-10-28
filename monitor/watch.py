@@ -3,13 +3,13 @@
 For each holding (derived from trades, monitor.holdings):
   8-Ks      new filings from SEC submissions. Red-flag items are urgent; any other 8-K is informational.
   quotes    the live price against yesterday's close; a drop of 10% or more is urgent.
-Alerts go through monitor.alerts.plan (no repeats unless worse, quiet hours, snooze) and out on both channels
+Alerts go through monitor.alerts.plan (no repeats unless worse, quiet hours, snooze) to the ACTIVE channels
 (monitor.delivery); every decision is appended to the alerts table. The 7 am run is there to release what quiet
 hours held (PLAN: held until 7 am). A source that fails is printed loudly and fails the run after the alerts that
 did work are sent; nothing is guessed around.
 
 Usage: python -m monitor.watch OUT_DIR [test]
-  test  also sends one test alert, to prove both channels (held if it's quiet hours, released at 7 am)
+  test  also sends one test alert, to prove the channels work (held if it's quiet hours, released at 7 am)
 """
 import json
 import sys
@@ -19,6 +19,9 @@ from pathlib import Path
 from monitor import alerts, delivery, holdings
 from pipeline import db, sec
 
+# Your choice 2026-10-28: alerts only in the app (the site's Today screen) for now, no email setup. Email and
+# Discord still work: add them here, plus their secrets in the watch workflow, to switch them back on.
+ACTIVE = ("app",)
 HOURS = range(7, 19)  # Central; GitHub's cron is UTC, so the schedule over-fires and due() decides
 DROP = -0.10
 LOOKBACK_DAYS = 4  # 8-Ks this recent are checked each run; already-sent ones are repeats (covers weekends, delays)
@@ -108,7 +111,7 @@ def run(con, now, test=False, deliver=delivery.deliver, **sources):
     found += [test_alert(now)] if test else []
     log = {"at": now.isoformat(timespec="seconds"), "holdings": len(held), "alerts": len(found), "sent": {},
            "failures": failures}
-    for ch, (msg, rows) in alerts.plan(found, alerts.history(con), now).items():
+    for ch, (msg, rows) in alerts.plan(found, alerts.history(con), now, channels=ACTIVE).items():
         if msg:
             try:
                 deliver(ch, msg)

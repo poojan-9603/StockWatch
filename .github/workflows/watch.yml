@@ -1,18 +1,19 @@
 # M5 holdings watch: hourly on weekdays, 7 am to 6 pm Central (monitor.watch). GitHub's cron is UTC and ignores
 # daylight saving, so it fires 12:17 to 00:17 UTC and the job itself skips any hour outside the watch. Shares the
-# r2-writer group with the nightly run, so the two never write the database at once. Manual runs can send a test
-# alert to prove both channels (held in quiet hours, released by the 7 am run).
+# r2-writer group with the nightly run, so the two never write the database at once. Alerts go to the app only for
+# now (monitor.watch.ACTIVE); to switch email and Discord back on, add them there and put SMTP_HOST, SMTP_PORT,
+# SMTP_USER, SMTP_PASSWORD, ALERT_EMAIL_TO and DISCORD_WEBHOOK_URL back in env and the secrets check. Manual runs can
+# send a test alert (held in quiet hours, released by the 7 am run).
 name: watch
 
 on:
-  # Off until the six alert secrets are in (docs/M5.md); every scheduled run would fail its secrets check before then.
-  # schedule:
-  #   - cron: "17 12-23 * * 1-5"
-  #   - cron: "17 0 * * 2-6"
+  schedule:
+    - cron: "17 12-23 * * 1-5"
+    - cron: "17 0 * * 2-6"
   workflow_dispatch:
     inputs:
       test:
-        description: "Also send a test alert on both channels"
+        description: "Also send a test alert"
         type: boolean
         default: true
 
@@ -29,12 +30,6 @@ jobs:
     timeout-minutes: 20
     env:
       SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-      SMTP_HOST: ${{ secrets.SMTP_HOST }}
-      SMTP_PORT: ${{ secrets.SMTP_PORT }}
-      SMTP_USER: ${{ secrets.SMTP_USER }}
-      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       BUCKET: ${{ secrets.R2_BUCKET }}
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -45,8 +40,7 @@ jobs:
     steps:
       - name: Check secrets
         run: |
-          for v in SEC_USER_AGENT SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD ALERT_EMAIL_TO DISCORD_WEBHOOK_URL \
-                   R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+          for v in SEC_USER_AGENT R2_ACCOUNT_ID BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
             [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
           done
       - uses: actions/checkout@v4
