@@ -97,7 +97,8 @@ def checked(result, stock, ds, sides=False):
     except schema.SchemaError as e:
         return None, cost, f"schema: {e}"
     kept, removed = verify.verify(a["claims"], {d["id"]: d["text"] for d in ds}, stock["numbers"].values())
-    return a | {"claims": kept, "removed": len(removed)}, cost, None
+    return a | {"claims": kept, "removed": len(removed),
+                "removed_claims": [c | {"reason": why} for why, c in removed]}, cost, None
 
 
 def rerun(stock):
@@ -125,8 +126,8 @@ def run(client, stocks, poll=60):
                 continue
             a, c, err = checked(got.get(f"s{i}-{role}"), s, ds)
             cost += c
-            ops[role] = {"verdict": a["verdict"], "confidence": a["confidence"], "claims": a["claims"],
-                         "removed": a["removed"]} if a else {"verdict": None, "error": err}
+            ops[role] = {k: a[k] for k in ("verdict", "confidence", "claims", "removed", "removed_claims")} if a \
+                else {"verdict": None, "error": err}
             if err:
                 print(f"PANEL {s['symbol']} {role} failed: {err}", flush=True)
         opinions[i] = (ops, cost)
@@ -157,7 +158,8 @@ def run(client, stocks, poll=60):
             continue
         removed = a["removed"] + sum(o.get("removed", 0) for o in ops.values())
         views.append(base | {"verdict": a["verdict"], "confidence": a["confidence"], "low_confidence": low,
-                             "claims": a["claims"], "claims_removed": removed, "cost": cost, "error": None})
+                             "claims": a["claims"], "claims_removed": removed, "removed_claims": a["removed_claims"],
+                             "cost": cost, "error": None})
     return views
 
 
@@ -191,7 +193,8 @@ def row(view, created_at):
     return {"date": view["date"], "cik": view["cik"], "symbol": view["symbol"], "verdict": view["verdict"],
             "confidence": view.get("confidence"),
             "claims": json.dumps({"claims": view.get("claims", []), "low_confidence": view.get("low_confidence"),
-                                  "claims_removed": view.get("claims_removed"), "opinions": view["opinions"],
+                                  "claims_removed": view.get("claims_removed"),
+                                  "removed_claims": view.get("removed_claims", []), "opinions": view["opinions"],
                                   "error": view["error"]}, sort_keys=True),
             "model": f"{ROUTINE} readers, {JUDGE} judge", "created_at": created_at}
 

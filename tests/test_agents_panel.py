@@ -114,3 +114,11 @@ def test_judge_claims_need_a_side():
     ok = json.loads(raw)
     ok["claims"][0]["side"] = "for"
     assert schema.parse(json.dumps(ok), {"d"}, owned=False, sides=True)["claims"][0]["side"] == "for"
+
+
+def test_removed_claims_keep_their_reason():
+    s = stock(2, date_for(2, False), ["filing"])
+    v = panel.run(client(), [s], poll=0)[0]
+    assert v["removed_claims"] == [{"claim": "Debt is high", "quote": "not in any document", "doc_id": "d2-0",
+                                    "side": "against", "reason": "quote"}]
+    assert json.loads(panel.row(v, "t")["claims"])["removed_claims"][0]["reason"] == "quote"
