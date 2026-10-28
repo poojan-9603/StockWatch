@@ -69,3 +69,20 @@ def test_an_empty_quote_is_not_evidence():
     from agents.verify import verify
     kept, removed = verify([{"claim": "Sales grew", "quote": "  ", "doc_id": "d1"}], {"d1": "Sales grew 5%."})
     assert not kept and removed[0][0] == "quote"
+
+
+def test_period_labels_and_document_years_are_not_figures():
+    doc = {"8k-2": "Third quarter of fiscal 2026. The Company posted quarterly revenue of $109.4 billion, up 16 "
+                   "percent year over year."}
+    quote = "The Company posted quarterly revenue of $109.4 billion, up 16 percent year over year."
+    claims = [
+        {"claim": "Q3 FY2026 revenue was $109.4 billion, up 16%", "quote": quote, "doc_id": "8k-2"},
+        {"claim": "In fiscal 2026 Q3, H1 strength continued: up 16%", "quote": quote, "doc_id": "8k-2"},
+        {"claim": "Revenue growth slowed from 17% to 16%", "quote": quote, "doc_id": "8k-2"},  # 17 from nowhere
+        {"claim": "Revenue in 2019 was lower", "quote": quote, "doc_id": "8k-2"},  # a year the document never names
+        {"claim": "Revenue was $2,026 million", "quote": quote, "doc_id": "8k-2"},  # a figure, not a year
+        {"claim": "Trades at 15x earnings", "quote": quote, "doc_id": "8k-2"},  # glued on the right still counts
+    ]
+    kept, removed = verify(claims, doc)
+    assert kept == claims[:2]
+    assert [r for r, _ in removed] == ["number"] * 4

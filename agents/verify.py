@@ -2,12 +2,15 @@
 
 A quote must appear in its document word for word: only whitespace and curly-vs-straight quote marks are
 normalized. Every number in a claim must equal a number from our database or one in its own quote (sign and
-thousands commas ignored, no rounding). Failing claims are removed and returned with the reason, for counting.
+thousands commas ignored, no rounding). Two things are labels, not figures: digits glued to letters on the left
+(Q3, FY2026, H1), and a bare year the cited document itself mentions ("fiscal 2026"). Failing claims are removed
+and returned with the reason, for counting.
 """
 import re
 
 QUOTES = str.maketrans({c: "'" for c in "‘’‚‛"} | {c: '"' for c in "“”„‟"})
-NUMBER = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
+NUMBER = re.compile(r"(?<![A-Za-z\d])(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)")
+YEAR = re.compile(r"(?<![\d,.$])(?:19|20)\d\d(?![\d,]|\.\d)")
 
 
 def normalize(s):
@@ -16,6 +19,12 @@ def normalize(s):
 
 def numbers(s):
     return {float(n.replace(",", "")) for n in NUMBER.findall(s)}
+
+
+def without_years(claim, doc):
+    """The claim with every bare year that also appears in its document taken out."""
+    years = set(YEAR.findall(doc))
+    return YEAR.sub(lambda m: "" if m.group(0) in years else m.group(0), claim)
 
 
 def verify(claims, docs, db_numbers=()):
@@ -27,7 +36,7 @@ def verify(claims, docs, db_numbers=()):
         q = normalize(c["quote"])
         if not q or q not in texts.get(c["doc_id"], ""):
             removed.append(("quote", c))
-        elif not numbers(c["claim"]) <= db | numbers(c["quote"]):
+        elif not numbers(without_years(c["claim"], docs.get(c["doc_id"], ""))) <= db | numbers(c["quote"]):
             removed.append(("number", c))
         else:
             kept.append(c)
