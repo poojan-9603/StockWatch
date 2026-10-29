@@ -1,0 +1,232 @@
+"""Live scoring and paper verdicts with the frozen design (paper mode, docs/M3.md and docs/LIVE.md).
+
+Every night, for the latest trading day only (inside quant.lock.live, hard rule 1):
+  scores    the seven signals and the re-ranked score for every stock in the live universe (PLAN Step 1), ranked
+            across all of it -> market/scores/latest.parquet, for the site and the panel. Not a record.
+On the month's last trading day, if the data is current (FROZEN rebalances monthly):
+  snapshot  that day's scores -> market/scores/month_end/<day>.parquet, written once and never changed
+  paper     quant.backtest.simulate replays FROZEN from the first snapshot over every snapshot, so the paper
+            portfolio is a pure function of the snapshots and prices. Fills are at the next open, as in the backtest.
+  verdicts  that day's decisions appended to the verdict log (hash chain): Buy, Sell (with the reason), Trim, Hold,
+            book "paper". Earlier months' recorded Buys and Sells must match the replay, or nothing is written.
+A month-end whose data arrives late gets no decisions, said loudly: deciding late but filling at the earlier open
+would be a look-ahead. The news check is recorded as not checked (no news source yet; FROZEN had none).
+
+Usage: python -m quant.live OUT_DIR
+"""
+import json
+import sys
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+import pandas as pd
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
+from dateutil.easter import easter
+
+from pipeline.db import add_verdict, connect
+from quant import backtest as bt, lock, signals as sg
+from quant.measure import members
+from quant.sectors import gics11
+
+HISTORY_DAYS = 400  # calendar days of prices: 252 trading days for momentum and volatility, with room to spare
+
+
+def _observed(d):
+    return d - timedelta(days=1) if d.weekday() == 5 else d + timedelta(days=1) if d.weekday() == 6 else d
+
+
+def _nth(year, month, weekday, n):
+    """The nth given weekday of a month (n = -1: the last)."""
+    if n > 0:
+        first = date(year, month, 1)
+        return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (n - 1))
+    last = date(year, month + 1, 1) - timedelta(days=1) if month < 12 else date(year, 12, 31)
+    return last - timedelta(days=(last.weekday() - weekday) % 7)
+
+
+def holidays(year):
+    """NYSE full-day closures by its published rules. A New Year's Day on a Saturday isn't made up on the Friday.
+    Unscheduled closures (a national day of mourning) aren't known in advance."""
+    ny = date(year, 1, 1)
+    h = {_observed(ny) if ny.weekday() == 6 else ny, _nth(year, 1, 0, 3), _nth(year, 2, 0, 3),
+         easter(year) - timedelta(days=2), _nth(year, 5, 0, -1), _observed(date(year, 7, 4)), _nth(year, 9, 0, 1),
+         _nth(year, 11, 3, 4), _observed(date(year, 12, 25))}
+    if year >= 2022:
+        h.add(_observed(date(year, 6, 19)))
+    return h
+
+
+def trading_day(d):
+    return d.weekday() < 5 and d not in holidays(d.year)
+
+
+def next_trading_day(d):
+    d += timedelta(days=1)
+    while not trading_day(d):
+        d += timedelta(days=1)
+    return d
+
+
+def month_end(day):
+    d = date.fromisoformat(day)
+    return trading_day(d) and next_trading_day(d).month != d.month
+
+
+def current(day, now):
+    """True if a decision at `day`'s close is still in time: before the next trading day's 9:30 am New York open,
+    where it fills (13:30 UTC, the earlier of the two daylight-saving cases). A late GitHub start is fine; data that
+    only arrives after that open is not."""
+    nxt = next_trading_day(date.fromisoformat(day))
+    return now < datetime(nxt.year, nxt.month, nxt.day, 13, 30, tzinfo=timezone.utc)
+
+
+def latest_universe(m, day):
+    files = sorted(p for p in (m / "universe").glob("*.parquet") if p.stem <= day[:7])
+    if not files:
+        raise SystemExit(f"no live universe file for {day[:7]} or before in market/universe")
+    u = pd.read_parquet(files[-1]).sort_values("dollar_volume", ascending=False).drop_duplicates("cik")
+    return u[["cik", "symbol", "name"]].assign(cik=lambda x: x["cik"].astype(int))
+
+
+def load(out, day, symbols, since):
+    """Prices for `symbols` ({symbol: cik}) from `since` to `day`, with everything scoring and the replay read.
+    Call inside lock.live(day)."""
+    m = out / "market"
+    t = ds.dataset(m / "prices", partitioning="hive").to_table(
+        columns=["symbol", "date", "open", "close", "dividend", "split"],
+        filter=(pc.field("source") == "yfinance") & (pc.field("date") >= since) & (pc.field("date") <= day)
+        & pc.field("symbol").isin(sorted(symbols))).to_pandas()
+    lock.check(t["date"])
+    t["cik"] = t["symbol"].map(symbols)
+    p, wide = bt.returns(t.sort_values(["cik", "date"]).drop_duplicates(["cik", "date"]).reset_index(drop=True))
+    blocked = set()
+    for f in sorted((m / "quality" / "daily").glob("*.parquet")):
+        q = pd.read_parquet(f)
+        for r in q[(q["severity"] == "quarantine") & q["symbol"].isin(symbols)].itertuples():
+            blocked |= {(symbols[r.symbol], x) for x in pd.date_range(r.start, r.end).strftime("%Y-%m-%d")}
+    last = p.groupby("cik")["date"].max()
+    ended = last[last < sg.shift(day, -7)]
+    k8 = pd.read_parquet(m / "filings_8k.parquet", columns=["cik", "filed", "items"])
+    k8 = k8[k8["items"].fillna("").str.contains("1.03", regex=False) & k8["cik"].isin(ended.index)]
+    failed = {c for c, L in ended.items() if ((k8["cik"] == c) & (k8["filed"] >= sg.shift(L, -365))
+                                             & (k8["filed"] <= sg.shift(L, 30))).any()}
+    co = pd.read_parquet(m / "companies.parquet").set_index("cik")
+    facts = ds.dataset(m / "fundamentals" / "facts.parquet").to_table(
+        columns=["cik", "tag", "start", "end", "value", "form", "filed", "accn"],
+        filter=pc.field("tag").isin(sg.TAGS) & (pc.field("filed") <= day)
+        & pc.field("cik").isin(sorted(set(symbols.values())))).to_pandas().sort_values(["end", "filed"])
+    lock.check(facts["filed"])
+    return dict(p=p, close=wide["close"], tr=wide["tr"], tro=wide["tro"], blocked=blocked, ended=ended,
+                failed=failed, sector=co["sic"].map(gics11), facts=facts)
+
+
+def score(d, day, ciks, sp500):
+    """One day's scores for `ciks`: the seven ranks, n, n60, score (FROZEN's choices, re-ranked), sector, vol."""
+    ciks = [c for c in ciks if c in d["close"].columns and pd.notna(d["close"].at[day, c])]
+    eq, splits, multi = sg.eps_quarters(d["facts"]), sg.splits_table(d["p"]), sg.multi_class(d["facts"])
+    raw = sg.raw(day, ciks, d["close"], d["tr"], d["facts"], eq, splits, multi)
+    raw = raw.assign(date=day, sector=d["sector"].reindex(raw.index).values).rename_axis("cik").reset_index()
+    s = bt.scored(raw, bt.FROZEN["choice"], bt.FROZEN["rule"])
+    return s.assign(sp500=s["cik"].isin(sp500))
+
+
+def verdict_rows(t, tr, sc, symbols):
+    """The verdict log rows for one month-end's decisions (trace entry tr) with that day's scores sc."""
+    s = sc.set_index("cik")
+    ranks = lambda c: json.dumps({k: (None if pd.isna(s.at[c, k]) else round(float(s.at[c, k]), 1))
+                                  for k in sg.SIGNALS}) if c in s.index else None
+    sym = {c: n for n, c in symbols.items()}
+    base = {"book": "paper", "design": "FROZEN (docs/M3.md)", "market_mood": "bad" if tr["mood_bad"] else "ok",
+            "news": "not checked (no news source yet; the frozen design had none)", "timing": "not used (frozen)"}
+    rows = []
+    for c, size in tr["buys"].items():
+        rows.append(("Buy", c, base | {"score_bar": tr["bar"], "signals_above_60": int(s.at[c, "n60"]),
+                                       "room": "yes", "size_pct": round(100 * size, 2),
+                                       "slice": "S&P 500" if s.at[c, "sp500"] else "outside the S&P 500"}))
+    for c, why in tr["sells"].items():
+        rows.append(("Sell", c, base | {"reason": why, "weight_pct": round(100 * tr["weights"].get(c, 0), 2)}))
+    for c, cap in tr["trims"].items():
+        rows.append(("Trim", c, base | {"to_pct": round(100 * cap, 2),
+                                        "weight_pct": round(100 * tr["weights"].get(c, 0), 2)}))
+    for c in tr["keep"]:
+        if c not in tr["trims"]:
+            rows.append(("Hold", c, base | {"weight_pct": round(100 * tr["weights"].get(c, 0), 2)}))
+    return [dict(date=t, cik=int(c), symbol=sym.get(c), verdict=v,
+                 score=None if c not in s.index or pd.isna(s.at[c, "score"]) else round(float(s.at[c, "score"]), 2),
+                 signal_ranks=ranks(c), gates=json.dumps(g, sort_keys=True)) for v, c, g in rows]
+
+
+def check_replay(con, trace):
+    """Earlier months' recorded paper Buys and Sells must be exactly what the replay decides."""
+    logged = {}
+    for t, c, v, g in con.execute("SELECT date, cik, verdict, gates FROM verdicts WHERE verdict IN ('Buy', 'Sell')"):
+        if json.loads(g or "{}").get("book") == "paper":
+            logged.setdefault(t, {"Buy": set(), "Sell": set()})[v].add(c)
+    for t, got in logged.items():
+        want = {"Buy": set(trace.get(t, {}).get("buys", {})), "Sell": set(trace.get(t, {}).get("sells", {}))}
+        if got != want:
+            raise SystemExit(f"paper replay doesn't match the verdict log for {t}: logged {got}, replay {want}; "
+                             "no verdicts written (data revised under the snapshots?)")
+
+
+def run(out, con, now, bench=None):
+    """The nightly step. Returns a log dict."""
+    m = out / "market"
+    day = ds.dataset(m / "prices", partitioning="hive").to_table(
+        columns=["date"], filter=pc.field("source") == "yfinance").column("date").to_pandas().max()
+    log = {"day": day, "scored": 0, "month_end": month_end(day), "verdicts": 0, "notes": []}
+    with lock.live(day, today=now.strftime("%Y-%m-%d")):
+        u = latest_universe(m, day)
+        snaps = {p.stem: pd.read_parquet(p) for p in sorted((m / "scores" / "month_end").glob("*.parquet"))}
+        symbols = dict(zip(u["symbol"], u["cik"]))
+        for s in snaps.values():  # stocks scored at earlier month-ends stay priced for the replay
+            symbols |= {k: c for k, c in zip(s["symbol"], s["cik"]) if k not in symbols}
+        start = min([sg.shift(day, -HISTORY_DAYS)] + [sg.shift(t, -HISTORY_DAYS) for t in snaps])
+        d = load(out, day, symbols, start)
+        segs = pd.read_parquet(m / "ticker_map.parquet")
+        sc = score(d, day, list(u["cik"]), set(members(segs, day)["cik"]))
+        sc = sc.assign(symbol=sc["cik"].map(dict(zip(u["cik"], u["symbol"]))))
+        (m / "scores").mkdir(parents=True, exist_ok=True)
+        sc.to_parquet(m / "scores" / "latest.parquet", index=False)
+        log["scored"] = int(sc["score"].notna().sum())
+        if not month_end(day):
+            return log
+        if not current(day, now):
+            log["notes"].append(f"{day} is a month-end but its data arrived late: no decisions this month")
+            raise SystemExit(log["notes"][-1])
+        if day not in snaps:
+            (m / "scores" / "month_end").mkdir(parents=True, exist_ok=True)
+            sc.to_parquet(m / "scores" / "month_end" / f"{day}.parquet", index=False)
+            snaps[day] = sc
+        if con.execute("SELECT 1 FROM verdicts WHERE date = ? LIMIT 1", (day,)).fetchone():
+            log["notes"].append(f"verdicts for {day} already recorded (a rerun)")
+            return log
+        if bench is None:
+            bt.bench(out)
+            bench = {k: pd.read_parquet(out / "bench" / f"{k}.parquet") for k in ["SPY", "RSP"]}
+            bench["vix"] = pd.read_parquet(out / "bench" / "vix.parquet")
+        allsc = pd.concat(snaps.values(), ignore_index=True)
+        trace = {}
+        bt.simulate(d, allsc, {k: bench[k] for k in ["SPY", "RSP"]}, bench["vix"], bt.FROZEN | {"start": min(snaps)},
+                    trace)
+        check_replay(con, trace)
+        if day not in trace:
+            raise SystemExit(f"the replay made no decision on {day}; no verdicts written")
+        rows = verdict_rows(day, trace[day], sc, symbols)
+        for r in rows:
+            add_verdict(con, **r)
+        log["verdicts"] = len(rows)
+        log["decisions"] = {v: sum(r["verdict"] == v for r in rows) for v in ("Buy", "Sell", "Trim", "Hold")}
+    return log
+
+
+def main(out_dir):
+    out = Path(out_dir)
+    con = connect(out / "db" / "app.sqlite")
+    log = run(out, con, datetime.now(timezone.utc))
+    print(json.dumps(log, indent=1), flush=True)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])

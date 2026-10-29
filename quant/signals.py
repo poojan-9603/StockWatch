@@ -50,7 +50,7 @@ def real_split(r):
 def splits_table(long):
     """long: cik, date, split -> the real splits only (cik, date, split)."""
     s = long[long["split"].notna() & (long["split"] != 1) & (long["split"] > 0)]
-    return s[s["split"].map(real_split)][["cik", "date", "split"]]
+    return s.loc[s["split"].map(real_split).astype(bool), ["cik", "date", "split"]]  # .loc: an empty mask stays rows
 
 
 def split_factor(splits, ciks, frm, to):

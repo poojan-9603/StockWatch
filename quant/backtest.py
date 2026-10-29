@@ -88,6 +88,18 @@ def bench(out):
     print("bench: SPY, RSP, VIX saved", flush=True)
 
 
+def returns(p):
+    """p: one row per (cik, date), sorted, with open, close, dividend, split. Adds the daily total return at the close
+    (tr) and at the open (tro), split- and dividend-adjusted and missing after a gap of over 30 days. Returns (p,
+    {"close", "tr", "tro"} as days x cik)."""
+    g = p.groupby("cik")
+    prev, gap = g["close"].shift(), (pd.to_datetime(p["date"]) - pd.to_datetime(g["date"].shift())).dt.days
+    sp, div = p["split"].fillna(1.0).replace(0, 1.0), p["dividend"].fillna(0.0)
+    p = p.assign(tr=(sp * (p["close"] + div) / prev - 1).where(gap <= 30),
+                 tro=(sp * (p["open"] + div) / prev - 1).where(gap <= 30))
+    return p, {k: p.pivot(index="date", columns="cik", values=k).sort_index() for k in ["close", "tr", "tro"]}
+
+
 def load(out):
     """Validated daily prices per CIK and everything the backtest reads, all before the cutoff."""
     m = out / "market"
@@ -106,12 +118,7 @@ def load(out):
     p = t.merge(pm[["source", "symbol", "cik", "from", "to"]], on=["source", "symbol"])
     p = p[(p["date"] >= p["from"]) & (p["to"].isna() | (p["date"] <= p["to"]))]
     p = p.sort_values(["cik", "date", "from"]).drop_duplicates(["cik", "date"]).reset_index(drop=True)
-    g = p.groupby("cik")
-    prev, gap = g["close"].shift(), (pd.to_datetime(p["date"]) - pd.to_datetime(g["date"].shift())).dt.days
-    sp, div = p["split"].fillna(1.0).replace(0, 1.0), p["dividend"].fillna(0.0)
-    p["tr"] = (sp * (p["close"] + div) / prev - 1).where(gap <= 30)
-    p["tro"] = (sp * (p["open"] + div) / prev - 1).where(gap <= 30)
-    wide = {k: p.pivot(index="date", columns="cik", values=k).sort_index() for k in ["close", "tr", "tro"]}
+    p, wide = returns(p)
 
     q = pd.read_parquet(m / "quality" / "issues.parquet")
     q = q[q["severity"] == "quarantine"].merge(pm[["source", "symbol", "cik", "from", "to"]], on=["source", "symbol"])
@@ -231,9 +238,11 @@ def metrics(nav, rf=0.0):
             "sharpe": (r.mean() - rf) / r.std() * np.sqrt(252), "max_drawdown": dd}
 
 
-def simulate(d, sc, bench, vix, p):
+def simulate(d, sc, bench, vix, p, trace=None):
     """Daily simulation. Holdings are units of each stock's total-return index, so splits and dividends need no
-    bookkeeping. Returns (nav Series, stats dict)."""
+    bookkeeping. Returns (nav Series, stats dict). trace, if a dict, gets each rebalance day's decisions:
+    {day: {"buys": {cik: weight}, "sells": {cik: reason}, "trims": {cik: weight cap}, "keep": [cik], "weights":
+    {cik: weight}, "mood_bad", "bar", "nav"}} (quant.live builds the paper verdicts from it)."""
     tr, tro, close = d["tr"], d["tro"], d["close"]
     days = [x for x in close.index if x >= p["start"]]
     tri = (1 + tr.fillna(0)).cumprod()
@@ -292,20 +301,23 @@ def simulate(d, sc, bench, vix, p):
             continue
         mood_bad = p["filter"] != "none" and bool(bad.get(t, False))
         w = {c: v / total for c, v in val.items()}
-        sells = {c for c in units if c not in s.index}  # left the index or unpriced
+        why = {c: "left the universe or has no price" for c in units if c not in s.index}
         if p["filter"] == "hard" and mood_bad:
-            sells |= set(units)
+            why |= {c: "hard market filter" for c in units if c not in why}
         for c in units:
             sc_c = s["score"].get(c)
             if pd.notna(sc_c):
                 strikes[c] = strikes.get(c, 0) + 1 if sc_c < p["sell"] else 0
-                if strikes[c] >= p["strikes"]:
-                    sells.add(c)
+                if strikes[c] >= p["strikes"] and c not in why:
+                    why[c] = f"score below {p['sell']:g} at {p['strikes']} checks in a row"
+        sells = set(why)
         keep = [c for c in units if c not in sells]
         cap = min(p["cap"], p["cap_x"] * p["avg"])
+        trims, buys, bar = {}, {}, None
         for c in keep:
             if w.get(c, 0) > cap + 0.01:
                 orders[c] = -(w[c] - cap) * total
+                trims[c] = cap
         if not (p["filter"] == "hard" and mood_bad):
             bar = p["buy"] + (p["soft_raise"] if p["filter"] == "soft" and mood_bad else 0)
             cand = s[(s["score"] >= bar) & (s["n60"] >= p["n60"]) & ~s.index.isin(keep)]
@@ -325,6 +337,8 @@ def simulate(d, sc, bench, vix, p):
                     out_c = held_sc.index[0]  # swap out the weakest holding
                     held_sc = held_sc.iloc[1:]
                     sells.add(out_c)
+                    why[out_c] = f"swapped for a candidate {p['swap']:g}+ points better"
+                    trims.pop(out_c, None)
                     keep.remove(out_c)
                     sector_w = sector_w.sub(pd.Series({s["sector"].get(out_c, "Unknown") or "Unknown": w.get(out_c, 0)}),
                                             fill_value=0)
@@ -342,9 +356,13 @@ def simulate(d, sc, bench, vix, p):
                     continue
                 sector_w[sec] = sector_w.get(sec, 0) + size
                 orders[c] = size * total
+                buys[c] = size
                 room -= 1
         for c in sells:
             orders[c] = -np.inf
+        if trace is not None:
+            trace[t] = {"buys": buys, "sells": {c: why[c] for c in sells}, "trims": trims, "keep": list(keep),
+                        "weights": w, "mood_bad": mood_bad, "bar": bar, "nav": total}
     nav = pd.Series(nav)
     years = len(nav) / 252
     stats = {"turnover": traded / nav.mean() / years / 2, "avg_positions": float(np.mean(npos)),
