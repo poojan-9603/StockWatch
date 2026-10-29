@@ -10,9 +10,6 @@ on:
   schedule:
     - cron: "17 12-23 * * 1-5"
     - cron: "17 0 * * 2-6"
-    # ONE-TIME night test (docs/M5.md): 02:37 UTC on Oct 29 = 9:37 pm Central, inside quiet hours. It sends a test
-    # alert, which must be held and then released by the 7 am run. Remove this line once that's checked.
-    - cron: "37 2 29 10 *"
   workflow_dispatch:
     inputs:
       test:
@@ -55,9 +52,7 @@ jobs:
       - name: Within the watch hours?
         id: due
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event.schedule }}" = "37 2 29 10 *" ]; then
-            echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
-          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "go=1" >> "$GITHUB_OUTPUT"; exit 0; fi
           # a crash here fails the step; it must never read as "outside the hours"
           python -c "from datetime import datetime, timezone; from monitor.watch import due
           print('go=1' if due(datetime.now(timezone.utc)) else 'go=0')" >> "$GITHUB_OUTPUT"
@@ -70,9 +65,7 @@ jobs:
             --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
       - name: Watch
         if: steps.due.outputs.go == '1'
-        run: >-
-          python -m monitor.watch out ${{ ((github.event_name == 'workflow_dispatch' && inputs.test)
-          || github.event.schedule == '37 2 29 10 *') && 'test' || '' }}
+        run: python -m monitor.watch out ${{ (github.event_name == 'workflow_dispatch' && inputs.test) && 'test' || '' }}
       - name: Alert records back to R2
         if: always() && steps.db.outcome == 'success'
         run: |

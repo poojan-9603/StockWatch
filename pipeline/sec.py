@@ -38,12 +38,21 @@ def get(url, **kw):
             time.sleep(2 ** attempt * 5)
 
 
-def download(url, path):
+def download(url, path, tries=4):
+    """Stream a bulk file to disk. A connection cut mid-body (SEC once stopped companyfacts.zip at 134 MB of 1.4 GB)
+    restarts the download, up to `tries` times, then raises."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with get(url, stream=True) as r, open(path, "wb") as f:
-        for chunk in r.iter_content(1 << 20):
-            f.write(chunk)
-    return r.headers.get("Last-Modified")
+    for attempt in range(tries):
+        try:
+            with get(url, stream=True) as r, open(path, "wb") as f:
+                for chunk in r.iter_content(1 << 20):
+                    f.write(chunk)
+            return r.headers.get("Last-Modified")
+        except requests.RequestException as e:
+            print(f"SEC download cut off (try {attempt + 1}/{tries}): {url}: {e}", file=sys.stderr)
+            if attempt == tries - 1:
+                raise
+            time.sleep(2 ** attempt * 15)
 
 
 PERIODIC = {"10-K", "10-K405", "10-KSB", "10-KT", "10-Q", "10-QSB", "10-QT", "20-F", "40-F"}

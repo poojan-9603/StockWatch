@@ -48,3 +48,32 @@ def test_unreadable_company_file_or_page_raises(tmp_path):
         except ValueError:
             continue
         raise AssertionError(f"expected ValueError for {name}")
+
+
+def test_download_restarts_a_body_cut_off_midway(tmp_path, monkeypatch):
+    import requests
+    from pipeline import sec
+
+    class Cut:
+        headers = {"Last-Modified": "Thu"}
+
+        def __init__(self, ok):
+            self.ok = ok
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def iter_content(self, n):
+            yield b"part"
+            if not self.ok:
+                raise requests.exceptions.ChunkedEncodingError("IncompleteRead")
+            yield b"-rest"
+
+    calls = []
+    monkeypatch.setattr(sec, "get", lambda url, **kw: calls.append(1) or Cut(len(calls) > 1))
+    monkeypatch.setattr(sec.time, "sleep", lambda s: None)
+    assert sec.download("u", tmp_path / "f.zip") == "Thu"
+    assert (tmp_path / "f.zip").read_bytes() == b"part-rest" and len(calls) == 2
