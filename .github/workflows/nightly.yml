@@ -89,30 +89,39 @@ jobs:
         id: records
         run: python -m pipeline.backup out nightly $FIRST
       - name: Save to R2
+        id: save
         if: always()
+        # Records first (irreplaceable), then market data, raw downloads last. Every upload retries; one that still
+        # fails is reported and fails the step, but never stops the others (R2 once dropped a multipart upload of
+        # submissions.zip, which used to skip the database upload). Inbox files move only once the database is saved.
         run: |
+          set +e
           r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
-          [ -d out/raw ] && aws s3 sync out/raw "s3://$BUCKET/raw" $r2
-          if [ "${{ steps.prices.outcome }}" = "success" ]; then
-            for d in out/market/prices/year=*; do aws s3 sync "$d" "s3://$BUCKET/market/prices/$(basename "$d")" --delete $r2; done
-          fi
-          if [ "${{ steps.sec.outcome }}" = "success" ]; then
-            for f in companies filings_8k; do aws s3 cp "out/market/$f.parquet" "s3://$BUCKET/market/$f.parquet" $r2; done
-            aws s3 cp out/market/fundamentals/facts.parquet "s3://$BUCKET/market/fundamentals/facts.parquet" $r2
-          fi
-          [ -d out/market/quality ] && aws s3 sync out/market/quality "s3://$BUCKET/market/quality" $r2
-          [ -d out/market/scores ] && aws s3 sync out/market/scores "s3://$BUCKET/market/scores" $r2
-          [ -d out/logs ] && aws s3 sync out/logs "s3://$BUCKET/logs" $r2
-          if [ "${{ steps.records.outcome }}" = "success" ]; then
-            aws s3 cp out/db/app.sqlite "s3://$BUCKET/db/app.sqlite" $r2
-            aws s3 sync out/backups "s3://$BUCKET/backups" $r2
-            for f in out/inbox/*.json; do [ -e "$f" ] && aws s3 mv "s3://$BUCKET/inbox/$(basename "$f")" "s3://$BUCKET/inbox/processed/$(basename "$f")" $r2; done
-            for f in out/inbox/experiments/*.json; do [ -e "$f" ] && aws s3 mv "s3://$BUCKET/inbox/experiments/$(basename "$f")" "s3://$BUCKET/inbox/processed/experiments/$(basename "$f")" $r2; done
+          fail=""
+          try() { for i in 1 2 3; do "$@" && return 0; echo "retry $i: $*"; sleep $((i * 15)); done
+                  echo "::error::upload failed after 3 tries: $*"; fail=1; return 1; }
+          if [ "${{ steps.records.outcome }}" = "success" ] && try aws s3 cp out/db/app.sqlite "s3://$BUCKET/db/app.sqlite" $r2; then
+            echo "db_saved=1" >> "$GITHUB_OUTPUT"
+            try aws s3 sync out/backups "s3://$BUCKET/backups" $r2
+            for f in out/inbox/*.json; do [ -e "$f" ] && try aws s3 mv "s3://$BUCKET/inbox/$(basename "$f")" "s3://$BUCKET/inbox/processed/$(basename "$f")" $r2; done
+            for f in out/inbox/experiments/*.json; do [ -e "$f" ] && try aws s3 mv "s3://$BUCKET/inbox/experiments/$(basename "$f")" "s3://$BUCKET/inbox/processed/experiments/$(basename "$f")" $r2; done
             aws s3 ls "s3://$BUCKET/backups/daily/" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" | awk '{print $4}' | sort | head -n -30 | \
               while read k; do aws s3 rm "s3://$BUCKET/backups/daily/$k" $r2; done
           fi
+          if [ "${{ steps.prices.outcome }}" = "success" ]; then
+            for d in out/market/prices/year=*; do try aws s3 sync "$d" "s3://$BUCKET/market/prices/$(basename "$d")" --delete $r2; done
+          fi
+          if [ "${{ steps.sec.outcome }}" = "success" ]; then
+            for f in companies filings_8k; do try aws s3 cp "out/market/$f.parquet" "s3://$BUCKET/market/$f.parquet" $r2; done
+            try aws s3 cp out/market/fundamentals/facts.parquet "s3://$BUCKET/market/fundamentals/facts.parquet" $r2
+          fi
+          [ -d out/market/quality ] && try aws s3 sync out/market/quality "s3://$BUCKET/market/quality" $r2
+          [ -d out/market/scores ] && try aws s3 sync out/market/scores "s3://$BUCKET/market/scores" $r2
+          [ -d out/logs ] && try aws s3 sync out/logs "s3://$BUCKET/logs" $r2
+          [ -d out/raw ] && try aws s3 sync out/raw "s3://$BUCKET/raw" $r2
+          [ -z "$fail" ]
       - name: Text export to the backup repo
-        if: steps.records.outcome == 'success'
+        if: steps.save.outputs.db_saved == '1'
         run: |
           mkdir -p ~/.ssh && printf '%s\n' "$BACKUP_DEPLOY_KEY" > ~/.ssh/backup && chmod 600 ~/.ssh/backup
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/backup -o StrictHostKeyChecking=accept-new"
