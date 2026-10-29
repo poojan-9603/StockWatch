@@ -1,4 +1,5 @@
-# M2 nightly: SEC refresh, prices for the last 14 days, checks, Tiingo spot check, records, backups.
+# M2 nightly: SEC refresh, prices for the last 14 days, checks, Tiingo spot check, live scores and paper verdicts
+# (quant.live), records, backups.
 # Weekdays 01:17 UTC = 8:17 pm CDT / 7:17 pm CST, after the market and SEC's evening bulk rebuild. Odd minute on
 # purpose: GitHub starts crons late under load, and every step is safe to rerun.
 name: nightly
@@ -52,8 +53,12 @@ jobs:
         run: |
           r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
           for f in price_plan ticker_map companies; do aws s3 cp "s3://$BUCKET/market/$f.parquet" "out/market/$f.parquet" $r2; done
-          y=$(date -u +%Y); for yy in $((y-1)) $y; do aws s3 sync "s3://$BUCKET/market/prices/year=$yy" "out/market/prices/year=$yy" $r2; done
+          # from 2025: the paper replay (quant.live) needs prices from 400 days before its first month-end
+          y=$(date -u +%Y); for yy in $(seq 2025 $y); do aws s3 sync "s3://$BUCKET/market/prices/year=$yy" "out/market/prices/year=$yy" $r2; done
           aws s3 sync "s3://$BUCKET/inbox" out/inbox $r2 --exclude "processed/*"
+          aws s3 sync "s3://$BUCKET/market/universe" out/market/universe $r2
+          aws s3 sync "s3://$BUCKET/market/scores/month_end" out/market/scores/month_end $r2
+          aws s3 sync "s3://$BUCKET/market/quality/daily" out/market/quality/daily $r2
           aws s3 cp "s3://$BUCKET/backups/monthly/$(date -u +%Y-%m).sqlite" "out/backups/monthly/$(date -u +%Y-%m).sqlite" $r2 || true
           if aws s3 ls "s3://$BUCKET/db/app.sqlite" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" >/dev/null; then
             aws s3 cp "s3://$BUCKET/db/app.sqlite" out/db/app.sqlite $r2; echo "FIRST=" >> "$GITHUB_ENV"
@@ -75,6 +80,11 @@ jobs:
         id: spot
         continue-on-error: true
         run: python -m pipeline.daily out spotcheck
+      - name: Scores and paper verdicts (frozen design, latest day only)
+        id: scores
+        if: steps.sec.outcome == 'success' && steps.prices.outcome == 'success' && steps.checks.outcome == 'success'
+        continue-on-error: true
+        run: python -m quant.live out
       - name: Records and backups
         id: records
         run: python -m pipeline.backup out nightly $FIRST
@@ -91,6 +101,7 @@ jobs:
             aws s3 cp out/market/fundamentals/facts.parquet "s3://$BUCKET/market/fundamentals/facts.parquet" $r2
           fi
           [ -d out/market/quality ] && aws s3 sync out/market/quality "s3://$BUCKET/market/quality" $r2
+          [ -d out/market/scores ] && aws s3 sync out/market/scores "s3://$BUCKET/market/scores" $r2
           [ -d out/logs ] && aws s3 sync out/logs "s3://$BUCKET/logs" $r2
           if [ "${{ steps.records.outcome }}" = "success" ]; then
             aws s3 cp out/db/app.sqlite "s3://$BUCKET/db/app.sqlite" $r2
@@ -117,7 +128,7 @@ jobs:
         run: |
           f="out/logs/runs/$(date -u +%F).json"; [ -f "$f" ] && { echo '```json'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           bad=""
-          for s in "sec:${{ steps.sec.outcome }}" "prices:${{ steps.prices.outcome }}" "checks:${{ steps.checks.outcome }}" "spot:${{ steps.spot.outcome }}"; do
+          for s in "sec:${{ steps.sec.outcome }}" "prices:${{ steps.prices.outcome }}" "checks:${{ steps.checks.outcome }}" "spot:${{ steps.spot.outcome }}" "scores:${{ steps.scores.outcome }}"; do
             [ "${s#*:}" = "success" ] || bad="$bad ${s%%:*}"
           done
           [ -z "$bad" ] || { echo "::error::failed steps:$bad"; exit 1; }

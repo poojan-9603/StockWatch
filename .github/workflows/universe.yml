@@ -1,0 +1,44 @@
+# The month's live universe (pipeline.universe) on its own, from the prices, companies and facts already in R2.
+# The monthly prices job builds it too; this is for when a month needs it sooner (live scoring reads it). Manual.
+name: universe
+
+on: workflow_dispatch
+
+concurrency:
+  group: r2-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  universe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Inputs from R2
+        run: |
+          r2="--endpoint-url https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com --only-show-errors"
+          aws s3 cp "s3://$BUCKET/market/companies.parquet" out/market/companies.parquet $r2
+          aws s3 cp "s3://$BUCKET/market/fundamentals/facts.parquet" out/market/fundamentals/facts.parquet $r2
+          y=$(date -u +%Y); for yy in $((y-1)) $y; do aws s3 sync "s3://$BUCKET/market/prices/year=$yy" "out/market/prices/year=$yy" $r2; done
+      - name: Build
+        run: python -m pipeline.universe out
+      - name: Save to R2
+        run: |
+          aws s3 sync out/market/universe "s3://$BUCKET/market/universe" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
