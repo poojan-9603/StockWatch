@@ -199,35 +199,42 @@ def row(view, created_at):
             "model": f"{ROUTINE} readers, {JUDGE} judge", "created_at": created_at}
 
 
+def filing_docs(rows):
+    """Panel documents from 8-K rows (cik, accession, filed, items): the 8-K text as a filing, each EX-99 exhibit as
+    a company press release. Fetched through pipeline.sec (User-Agent, rate limit); empty documents dropped."""
+    import re
+
+    from agents import testset
+    from pipeline import sec
+    ds = []
+    for r in rows:
+        raw = sec.get(f"https://www.sec.gov/Archives/edgar/data/{r['cik']}/{r['accession'].replace('-', '')}/"
+                      f"{r['accession']}.txt").content.decode("utf-8", errors="replace")
+        ds.append(docs.document(testset.main_document(raw), f"8k-{r['accession']}", str(r["filed"]),
+                                f"SEC 8-K, items {r['items']}", "filing", html=False))
+        for k, d in enumerate(re.findall(r"<DOCUMENT>\s*<TYPE>\s*EX-99[^\n]*(.*?)</DOCUMENT>", raw, re.S)):
+            body = re.search(r"<TEXT>(.*?)</TEXT>", d, re.S)
+            ds.append(docs.document(body.group(1) if body else "", f"ex-{r['accession']}-{k}", str(r["filed"]),
+                                    "8-K exhibit 99 (company press release)", "company press release"))
+    return [d for d in ds if d["text"]]
+
+
 def smoke(filings_path, cik, symbol, out_dir, n=3, client=None):
     """One real run on a stock's latest n 8-Ks (the 8-K text as a filing, each EX-99 exhibit as a company press
     release), to check the prompts and schemas against the live API. Writes OUT_DIR/review/panel_smoke.json."""
-    import re
     from datetime import datetime, timezone
     from pathlib import Path
 
     import pandas as pd
 
-    from agents import testset
-    from pipeline import sec
     if client is None:
         import anthropic  # only here, so tests and the pipeline don't need the SDK
         client = anthropic.Anthropic(max_retries=6)
     f = pd.read_parquet(filings_path)
     f = f[(f["cik"] == int(cik)) & (f["form"] == "8-K")].sort_values("filed").tail(n)
-    ds = []
-    for r in f.itertuples():
-        raw = sec.get(f"https://www.sec.gov/Archives/edgar/data/{r.cik}/{r.accession.replace('-', '')}/"
-                      f"{r.accession}.txt").content.decode("utf-8", errors="replace")
-        ds.append(docs.document(testset.main_document(raw), f"8k-{r.accession}", str(r.filed),
-                                f"SEC 8-K, items {r.items}", "filing", html=False))
-        for k, d in enumerate(re.findall(r"<DOCUMENT>\s*<TYPE>\s*EX-99[^\n]*(.*?)</DOCUMENT>", raw, re.S)):
-            body = re.search(r"<TEXT>(.*?)</TEXT>", d, re.S)
-            ds.append(docs.document(body.group(1) if body else "", f"ex-{r.accession}-{k}", str(r.filed),
-                                    "8-K exhibit 99 (company press release)", "company press release"))
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    stock = {"cik": int(cik), "symbol": symbol, "date": today, "owned": False, "docs": [d for d in ds if d["text"]],
-             "numbers": {}}
+    stock = {"cik": int(cik), "symbol": symbol, "date": today, "owned": False,
+             "docs": filing_docs(f.to_dict("records")), "numbers": {}}
     v = run(client, [stock])[0]
     out = Path(out_dir) / "review"
     out.mkdir(parents=True, exist_ok=True)

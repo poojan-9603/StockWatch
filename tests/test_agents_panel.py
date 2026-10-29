@@ -9,6 +9,10 @@ from agents import docs, panel, schema
 from pipeline import contract
 
 
+def fmt_verdicts(params):
+    return params["output_config"]["format"]["schema"]["properties"]["verdict"]["enum"]
+
+
 class FakeBatches:
     def __init__(self, judge_fails=False):
         self.sent, self.judge_fails = [], judge_fails
@@ -30,19 +34,22 @@ class FakeBatches:
             ids = fmt["doc_id"]["enum"]
             body = p["messages"][0]["content"]
             doc_id = ids[0]
+            owned_ok = "Buy" in fmt_verdicts(p)
             text = body.split(f'id="{doc_id}"', 1)[1].split("\n", 2)[1]
             if cid.endswith("judge0") or cid.endswith("judge1"):
                 if self.judge_fails:
                     yield NS(custom_id=cid, result=NS(type="errored"))
                     continue
                 verdict = "Wait" if cid.endswith("judge1") else "Buy"
+                if not owned_ok:  # an owned stock answers with the owned words
+                    verdict = {"Buy": "Hold", "Wait": "Trim"}[verdict]
                 a = {"verdict": verdict, "confidence": 0.6,
                      "claims": [{"claim": "Sales grew 12 percent", "quote": text, "doc_id": doc_id, "side": "for"},
                                 {"claim": "Debt is high", "quote": "not in any document", "doc_id": doc_id,
                                  "side": "against"}]}
             else:
-                a = {"verdict": "Buy", "confidence": 0.7, "claims": [{"claim": "Strong quarter", "quote": text,
-                                                                       "doc_id": doc_id}]}
+                a = {"verdict": "Buy" if owned_ok else "Hold", "confidence": 0.7,
+                     "claims": [{"claim": "Strong quarter", "quote": text, "doc_id": doc_id}]}
             msg = NS(model=p["model"], stop_reason="end_turn", content=[NS(type="text", text=json.dumps(a))],
                      usage=NS(input_tokens=2000, output_tokens=300))
             yield NS(custom_id=cid, result=NS(type="succeeded", message=msg))
