@@ -58,6 +58,10 @@ jobs:
           aws s3 sync "s3://$BUCKET/inbox" out/inbox $r2 --exclude "processed/*"
           aws s3 sync "s3://$BUCKET/market/universe" out/market/universe $r2
           aws s3 sync "s3://$BUCKET/market/scores/month_end" out/market/scores/month_end $r2
+          # last night's scores, paper state and panel views, so the site still builds if scoring can't run tonight
+          aws s3 cp "s3://$BUCKET/market/scores/latest.parquet" out/market/scores/latest.parquet $r2 || true
+          aws s3 sync "s3://$BUCKET/market/paper" out/market/paper $r2
+          aws s3 sync "s3://$BUCKET/market/panel" out/market/panel $r2
           aws s3 sync "s3://$BUCKET/market/quality/daily" out/market/quality/daily $r2
           aws s3 cp "s3://$BUCKET/backups/monthly/$(date -u +%Y-%m).sqlite" "out/backups/monthly/$(date -u +%Y-%m).sqlite" $r2 || true
           if aws s3 ls "s3://$BUCKET/db/app.sqlite" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" >/dev/null; then
@@ -88,6 +92,14 @@ jobs:
       - name: Records and backups
         id: records
         run: python -m pipeline.backup out nightly $FIRST
+      - name: Site data (checked against the contract)
+        id: site
+        if: always() && steps.records.outcome == 'success' && hashFiles('out/market/paper/state.json') != ''
+        continue-on-error: true
+        run: |
+          blocked=""
+          [ "${{ steps.checks.outcome }}" = "success" ] || blocked="Tonight's data checks didn't pass, so there are no new scores or verdicts."
+          python -m pipeline.site out "$blocked"
       - name: Save to R2
         id: save
         if: always()
@@ -117,9 +129,36 @@ jobs:
           fi
           [ -d out/market/quality ] && try aws s3 sync out/market/quality "s3://$BUCKET/market/quality" $r2
           [ -d out/market/scores ] && try aws s3 sync out/market/scores "s3://$BUCKET/market/scores" $r2
+          [ -d out/market/paper ] && try aws s3 sync out/market/paper "s3://$BUCKET/market/paper" $r2
+          [ "${{ steps.site.outcome }}" = "success" ] && try aws s3 sync out/site "s3://$BUCKET/site" --delete $r2
           [ -d out/logs ] && try aws s3 sync out/logs "s3://$BUCKET/logs" $r2
           [ -d out/raw ] && try aws s3 sync out/raw "s3://$BUCKET/raw" $r2
           [ -z "$fail" ]
+      - name: Deploy the site (Cloudflare Pages, behind Access)
+        id: deploy
+        if: steps.site.outcome == 'success'
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_TEAM_DOMAIN: ${{ secrets.ACCESS_TEAM_DOMAIN }}
+          ACCESS_AUD: ${{ secrets.ACCESS_AUD }}
+          PAGES_PROJECT: ${{ vars.PAGES_PROJECT || 'stockwatch' }}
+        run: |
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID ACCESS_TEAM_DOMAIN ACCESS_AUD; do
+            [ -n "${!v}" ] || { echo "::warning::$v isn't set, so the site wasn't deployed (docs/M6.md)"; exit 0; }
+          done
+          set -e
+          (cd site && npm ci --no-audit --no-fund && npm run build) && (cd worker && npm ci --no-audit --no-fund)
+          cp -r out/site/data site/dist/data
+          # the Pages project's settings live here, built from secrets: the trade function's R2 binding and Access
+          printf '%s\n' "name = \"$PAGES_PROJECT\"" 'pages_build_output_dir = "./dist"' 'compatibility_date = "2026-10-01"' \
+            '[vars]' "ACCESS_TEAM_DOMAIN = \"$ACCESS_TEAM_DOMAIN\"" "ACCESS_AUD = \"$ACCESS_AUD\"" \
+            '[[r2_buckets]]' 'binding = "INBOX"' "bucket_name = \"$BUCKET\"" > site/wrangler.toml
+          cd site
+          ../worker/node_modules/.bin/wrangler pages project create "$PAGES_PROJECT" --production-branch main 2>/dev/null \
+            || echo "project $PAGES_PROJECT exists"
+          ../worker/node_modules/.bin/wrangler pages deploy dist --project-name "$PAGES_PROJECT" --branch main
       - name: Text export to the backup repo
         if: steps.save.outputs.db_saved == '1'
         run: |
@@ -137,7 +176,7 @@ jobs:
         run: |
           f="out/logs/runs/$(date -u +%F).json"; [ -f "$f" ] && { echo '```json'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           bad=""
-          for s in "sec:${{ steps.sec.outcome }}" "prices:${{ steps.prices.outcome }}" "checks:${{ steps.checks.outcome }}" "spot:${{ steps.spot.outcome }}" "scores:${{ steps.scores.outcome }}"; do
+          for s in "sec:${{ steps.sec.outcome }}" "prices:${{ steps.prices.outcome }}" "checks:${{ steps.checks.outcome }}" "spot:${{ steps.spot.outcome }}" "scores:${{ steps.scores.outcome }}" "site:${{ steps.site.outcome }}" "deploy:${{ steps.deploy.outcome }}"; do
             [ "${s#*:}" = "success" ] || bad="$bad ${s%%:*}"
           done
           [ -z "$bad" ] || { echo "::error::failed steps:$bad"; exit 1; }
