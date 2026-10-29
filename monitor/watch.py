@@ -102,6 +102,22 @@ def test_alert(now):
             "report": False}
 
 
+def send(con, found, now, failures, deliver=delivery.deliver):
+    """Plan, deliver and record alerts on the ACTIVE channels. Returns {channel: sent}; a channel whose delivery
+    fails records nothing, so the next run tries again, and the failure goes into `failures`."""
+    sent = {}
+    for ch, (msg, rows) in alerts.plan(found, alerts.history(con), now, channels=ACTIVE).items():
+        if msg:
+            try:
+                deliver(ch, msg)
+            except Exception as e:
+                failures.append(f"{ch} delivery: {e}")
+                continue
+        alerts.record(con, rows)
+        sent[ch] = sum(json.loads(r["body"])["status"] == "sent" for r in rows)
+    return sent
+
+
 def run(con, now, test=False, deliver=delivery.deliver, **sources):
     """Gather, plan, deliver, record. Returns a run log; raises after recording if anything failed."""
     as_of = now.astimezone(alerts.CENTRAL).date().isoformat()
@@ -109,17 +125,8 @@ def run(con, now, test=False, deliver=delivery.deliver, **sources):
     held = {lot["symbol"]: lot.get("cik") for lot in lots}
     found, failures = gather(held, now, **sources) if held else ([], [])
     found += [test_alert(now)] if test else []
-    log = {"at": now.isoformat(timespec="seconds"), "holdings": len(held), "alerts": len(found), "sent": {},
-           "failures": failures}
-    for ch, (msg, rows) in alerts.plan(found, alerts.history(con), now, channels=ACTIVE).items():
-        if msg:
-            try:
-                deliver(ch, msg)
-            except Exception as e:  # record nothing for this channel, so the next run tries again
-                failures.append(f"{ch} delivery: {e}")
-                continue
-        alerts.record(con, rows)
-        log["sent"][ch] = sum(json.loads(r["body"])["status"] == "sent" for r in rows)
+    log = {"at": now.isoformat(timespec="seconds"), "holdings": len(held), "alerts": len(found),
+           "sent": send(con, found, now, failures, deliver), "failures": failures}
     print(json.dumps(log, indent=1), flush=True)
     if failures:
         raise SystemExit("holdings watch failures:\n" + "\n".join(failures))

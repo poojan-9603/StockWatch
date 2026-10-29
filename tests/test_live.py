@@ -119,3 +119,25 @@ def test_the_replay_must_match_the_log(tmp_path):
     trace = {"2026-10-30": {"buys": {}, "sells": {}}}  # a replay that bought nothing
     with pytest.raises(SystemExit, match="doesn't match"):
         live.check_replay(con, trace)
+
+
+def test_paper_book_every_night_and_the_nightly_alerts(tmp_path):
+    from monitor import alerts, daily
+    out, bench = market(tmp_path)
+    con = connect(tmp_path / "app.sqlite")
+    live.run(out, con, utc(2026, 10, 31, 1, 17), bench=bench)  # the first month-end
+    out2, bench2 = market(tmp_path / "later", end="2026-11-04")
+    snap = out / "market" / "scores" / "month_end" / "2026-10-30.parquet"
+    (out2 / "market" / "scores" / "month_end").mkdir(parents=True)
+    (out2 / "market" / "scores" / "month_end" / snap.name).write_bytes(snap.read_bytes())
+    log = live.run(out2, con, utc(2026, 11, 5, 1, 17), bench=bench2)
+    p = log["paper"]
+    assert p["since"] == "2026-10-30" and p["positions"] > 0 and log["verdicts"] == 0
+    found = daily.alerts_for(log)
+    assert found[0]["key"] == "summary:2026-11-04" and "Paper book since 2026-10-30" in found[0]["text"]
+    assert daily.run(con, log, utc(2026, 11, 5, 1, 17)) == {"alerts": 1, "sent": {"app": 1}}
+    crash = log | {"paper": p | {"drawdown_pct": -22.5}}
+    a = daily.alerts_for(crash)
+    assert a[1]["tier"] == "urgent" and a[1]["key"].startswith("drawdown:paper:") and "Nothing is sold" in a[1]["text"]
+    assert daily.alerts_for({"day": "2026-10-29", "scored": 5})[0]["text"].endswith("starts at the first month-end.")
+    assert {h["status"] for h in alerts.history(con)} == {"sent"}

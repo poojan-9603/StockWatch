@@ -24,6 +24,7 @@ import pyarrow.compute as pc
 import pyarrow.dataset as ds
 from dateutil.easter import easter
 
+from monitor import daily
 from pipeline.db import add_verdict, connect
 from quant import backtest as bt, lock, signals as sg
 from quant.measure import members
@@ -170,6 +171,18 @@ def check_replay(con, trace):
                              "no verdicts written (data revised under the snapshots?)")
 
 
+def paper_stats(nav, bench, trace):
+    """The paper book against SPY since its start (nav starts at 1.0 on the first month-end's close)."""
+    spy = bt.bench_nav(bench, "SPY", list(nav.index))
+    last = trace[max(trace)] if trace else {"keep": [], "buys": {}}
+    return {"since": nav.index[0], "value": round(float(nav.iloc[-1]), 6),
+            "return_pct": round(100 * (nav.iloc[-1] / nav.iloc[0] - 1), 2),
+            "spy_return_pct": round(100 * (spy.iloc[-1] / spy.iloc[0] - 1), 2),
+            "drawdown_pct": round(100 * (nav.iloc[-1] / nav.max() - 1), 2), "peak_day": nav.idxmax(),
+            "day_change_pct": round(100 * (nav.iloc[-1] / nav.iloc[-2] - 1), 2) if len(nav) > 1 else 0.0,
+            "positions": len(last["keep"]) + len(last["buys"])}
+
+
 def run(out, con, now, bench=None):
     """The nightly step. Returns a log dict."""
     m = out / "market"
@@ -190,27 +203,31 @@ def run(out, con, now, bench=None):
         (m / "scores").mkdir(parents=True, exist_ok=True)
         sc.to_parquet(m / "scores" / "latest.parquet", index=False)
         log["scored"] = int(sc["score"].notna().sum())
-        if not month_end(day):
-            return log
-        if not current(day, now):
+        decide = month_end(day)
+        if decide and not current(day, now):
             log["notes"].append(f"{day} is a month-end but its data arrived late: no decisions this month")
             raise SystemExit(log["notes"][-1])
-        if day not in snaps:
+        if decide and day not in snaps:
             (m / "scores" / "month_end").mkdir(parents=True, exist_ok=True)
             sc.to_parquet(m / "scores" / "month_end" / f"{day}.parquet", index=False)
             snaps[day] = sc
-        if con.execute("SELECT 1 FROM verdicts WHERE date = ? LIMIT 1", (day,)).fetchone():
-            log["notes"].append(f"verdicts for {day} already recorded (a rerun)")
-            return log
+        if not snaps:
+            return log  # the paper book starts at the first month-end
         if bench is None:
             bt.bench(out)
             bench = {k: pd.read_parquet(out / "bench" / f"{k}.parquet") for k in ["SPY", "RSP"]}
             bench["vix"] = pd.read_parquet(out / "bench" / "vix.parquet")
         allsc = pd.concat(snaps.values(), ignore_index=True)
         trace = {}
-        bt.simulate(d, allsc, {k: bench[k] for k in ["SPY", "RSP"]}, bench["vix"], bt.FROZEN | {"start": min(snaps)},
-                    trace)
-        check_replay(con, trace)
+        nav, _ = bt.simulate(d, allsc, {k: bench[k] for k in ["SPY", "RSP"]}, bench["vix"],
+                             bt.FROZEN | {"start": min(snaps)}, trace)
+        check_replay(con, trace)  # every night, so revised data shows up the day it happens
+        log["paper"] = paper_stats(nav, bench, trace)
+        if not decide:
+            return log
+        if con.execute("SELECT 1 FROM verdicts WHERE date = ? LIMIT 1", (day,)).fetchone():
+            log["notes"].append(f"verdicts for {day} already recorded (a rerun)")
+            return log
         if day not in trace:
             raise SystemExit(f"the replay made no decision on {day}; no verdicts written")
         rows = verdict_rows(day, trace[day], sc, symbols)
@@ -224,8 +241,10 @@ def run(out, con, now, bench=None):
 def main(out_dir):
     out = Path(out_dir)
     con = connect(out / "db" / "app.sqlite")
-    log = run(out, con, datetime.now(timezone.utc))
+    now = datetime.now(timezone.utc)
+    log = run(out, con, now)
     print(json.dumps(log, indent=1), flush=True)
+    print(json.dumps(daily.run(con, log, now)), flush=True)
 
 
 if __name__ == "__main__":
