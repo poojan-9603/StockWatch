@@ -133,6 +133,11 @@ def test_paper_book_every_night_and_the_nightly_alerts(tmp_path):
     log = live.run(out2, con, utc(2026, 11, 5, 1, 17), bench=bench2)
     p = log["paper"]
     assert p["since"] == "2026-10-30" and p["positions"] > 0 and log["verdicts"] == 0
+    state = json.loads((out2 / "market" / "paper" / "state.json").read_text())
+    assert state["started"] and state["since"] == "2026-10-30" and state["positions"]
+    pos = state["positions"][0]
+    assert pos["bought"] == "2026-10-30" and pos["target_pct"] >= 2 and len(pos["prices"]) > 50
+    assert "S&P 500" in state["market"]["note"] and state["nav"][0] == ["2026-10-30", 1.0]
     found = daily.alerts_for(log)
     assert found[0]["key"] == "summary:2026-11-04" and "Paper book since 2026-10-30" in found[0]["text"]
     assert daily.run(con, log, utc(2026, 11, 5, 1, 17)) == {"alerts": 1, "sent": {"app": 1}}

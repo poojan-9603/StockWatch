@@ -195,7 +195,7 @@ def row(view, created_at):
             "claims": json.dumps({"claims": view.get("claims", []), "low_confidence": view.get("low_confidence"),
                                   "claims_removed": view.get("claims_removed"),
                                   "removed_claims": view.get("removed_claims", []), "opinions": view["opinions"],
-                                  "error": view["error"]}, sort_keys=True),
+                                  "error": view["error"], "cost": round(view.get("cost", 0.0), 6)}, sort_keys=True),
             "model": f"{ROUTINE} readers, {JUDGE} judge", "created_at": created_at}
 
 

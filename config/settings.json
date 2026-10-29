@@ -1,0 +1,6 @@
+{
+  "mode": "paper",
+  "managed_usd": 10000,
+  "llm_cap_usd": 10,
+  "_note": "Edit in the repo (docs/M6.md). managed_usd sizes the paper book in dollars; change it any time."
+}

@@ -238,11 +238,12 @@ def metrics(nav, rf=0.0):
             "sharpe": (r.mean() - rf) / r.std() * np.sqrt(252), "max_drawdown": dd}
 
 
-def simulate(d, sc, bench, vix, p, trace=None):
+def simulate(d, sc, bench, vix, p, trace=None, final=None):
     """Daily simulation. Holdings are units of each stock's total-return index, so splits and dividends need no
     bookkeeping. Returns (nav Series, stats dict). trace, if a dict, gets each rebalance day's decisions:
     {day: {"buys": {cik: weight}, "sells": {cik: reason}, "trims": {cik: weight cap}, "keep": [cik], "weights":
-    {cik: weight}, "mood_bad", "bar", "nav"}} (quant.live builds the paper verdicts from it)."""
+    {cik: weight}, "mood_bad", "bar", "nav"}} (quant.live builds the paper verdicts from it). final, if a dict, gets
+    the last day's book: {"day", "weights": {cik: weight}, "cash": share}."""
     tr, tro, close = d["tr"], d["tro"], d["close"]
     days = [x for x in close.index if x >= p["start"]]
     tri = (1 + tr.fillna(0)).cumprod()
@@ -363,6 +364,8 @@ def simulate(d, sc, bench, vix, p, trace=None):
         if trace is not None:
             trace[t] = {"buys": buys, "sells": {c: why[c] for c in sells}, "trims": trims, "keep": list(keep),
                         "weights": w, "mood_bad": mood_bad, "bar": bar, "nav": total}
+    if final is not None and days:
+        final.update(day=days[-1], weights={c: v / total for c, v in val.items()}, cash=cash / total)
     nav = pd.Series(nav)
     years = len(nav) / 252
     stats = {"turnover": traded / nav.mean() / years / 2, "avg_positions": float(np.mean(npos)),

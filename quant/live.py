@@ -183,6 +183,49 @@ def paper_stats(nav, bench, trace):
             "positions": len(last["keep"]) + len(last["buys"])}
 
 
+def mood(bench, day):
+    """The market filter's view on `day`: SPY against its 200-day average, and VIX against FROZEN's level."""
+    spy = bench["SPY"].set_index("date")["close"].loc[:day]
+    ma = spy.rolling(200).mean()
+    vix = bench["vix"].set_index("date")["vix"].loc[:day]
+    below, high = bool(spy.iloc[-1] < ma.iloc[-1]), bool(vix.iloc[-1] > bt.FROZEN["vix"])
+    note = (f"S&P 500 {'below' if below else 'above'} its 200-day average, VIX {vix.iloc[-1]:.1f} "
+            f"({'high' if high else 'normal'}).")
+    return {"bad_mood": below and high, "note": note + (" Buy bar raised, new positions half size." if below and high
+                                                        else "")}
+
+
+def paper_book(d, nav, final, bench, con, day, symbols):
+    """The paper book for the site: value history against SPY, and each position's weight, return since its fill
+    at the open after its Buy, today's move and recent closes."""
+    tri = (1 + d["tr"].fillna(0)).cumprod()
+    tri_open = tri.shift() * (1 + d["tro"])
+    buys = {}
+    for t, c, g, s in con.execute("SELECT date, cik, gates, score FROM verdicts WHERE verdict = 'Buy' ORDER BY id"):
+        g = json.loads(g or "{}")
+        if g.get("book") == "paper":
+            buys[c] = {"date": t, "size_pct": g.get("size_pct"), "score": s}
+    sym = {c: n for n, c in symbols.items()}
+    spy, rsp = (bt.bench_nav(bench, k, list(nav.index)) for k in ("SPY", "RSP"))
+    positions = []
+    for c, w in sorted(final.get("weights", {}).items(), key=lambda x: -x[1]):
+        b = buys.get(c, {})
+        after = [x for x in tri.index if b and x > b["date"]]
+        entry = tri_open.at[after[0], c] if after and pd.notna(tri_open.at[after[0], c]) else None
+        closes = d["close"][c].loc[:day].dropna().tail(130)
+        positions.append({"cik": int(c), "symbol": sym.get(c), "weight_pct": round(100 * w, 2),
+                          "bought": b.get("date"), "target_pct": b.get("size_pct"), "buy_score": b.get("score"),
+                          "return_pct": round(100 * (tri.at[day, c] / entry - 1), 2) if entry else 0.0,
+                          "day_change_pct": round(100 * float(d["tr"].at[day, c]), 2)
+                          if pd.notna(d["tr"].at[day, c]) else 0.0,
+                          "close": float(closes.iloc[-1]) if len(closes) else None,
+                          "prices": [[t, round(float(v), 4)] for t, v in closes.items()]})
+    return {"since": nav.index[0], "cash_pct": round(100 * final.get("cash", 1.0), 2),
+            "nav": [[t, round(float(v), 6)] for t, v in nav.items()],
+            "spy": [[t, round(float(v), 6)] for t, v in spy.items()],
+            "rsp": [[t, round(float(v), 6)] for t, v in rsp.items()], "positions": positions}
+
+
 def run(out, con, now, bench=None):
     """The nightly step. Returns a log dict."""
     m = out / "market"
@@ -199,7 +242,8 @@ def run(out, con, now, bench=None):
         d = load(out, day, symbols, start)
         segs = pd.read_parquet(m / "ticker_map.parquet")
         sc = score(d, day, list(u["cik"]), set(members(segs, day)["cik"]))
-        sc = sc.assign(symbol=sc["cik"].map(dict(zip(u["cik"], u["symbol"]))))
+        sc = sc.assign(symbol=sc["cik"].map(dict(zip(u["cik"], u["symbol"]))),
+                       name=sc["cik"].map(dict(zip(u["cik"], u["name"]))))
         (m / "scores").mkdir(parents=True, exist_ok=True)
         sc.to_parquet(m / "scores" / "latest.parquet", index=False)
         log["scored"] = int(sc["score"].notna().sum())
@@ -211,18 +255,23 @@ def run(out, con, now, bench=None):
             (m / "scores" / "month_end").mkdir(parents=True, exist_ok=True)
             sc.to_parquet(m / "scores" / "month_end" / f"{day}.parquet", index=False)
             snaps[day] = sc
-        if not snaps:
-            return log  # the paper book starts at the first month-end
         if bench is None:
             bt.bench(out)
             bench = {k: pd.read_parquet(out / "bench" / f"{k}.parquet") for k in ["SPY", "RSP"]}
             bench["vix"] = pd.read_parquet(out / "bench" / "vix.parquet")
+        state = {"day": day, "market": mood(bench, day), "started": bool(snaps)}
+        (m / "paper").mkdir(parents=True, exist_ok=True)
+        if not snaps:
+            (m / "paper" / "state.json").write_text(json.dumps(state, indent=1))
+            return log  # the paper book starts at the first month-end
         allsc = pd.concat(snaps.values(), ignore_index=True)
-        trace = {}
+        trace, final = {}, {}
         nav, _ = bt.simulate(d, allsc, {k: bench[k] for k in ["SPY", "RSP"]}, bench["vix"],
-                             bt.FROZEN | {"start": min(snaps)}, trace)
+                             bt.FROZEN | {"start": min(snaps)}, trace, final)
         check_replay(con, trace)  # every night, so revised data shows up the day it happens
         log["paper"] = paper_stats(nav, bench, trace)
+        state |= paper_book(d, nav, final, bench, con, day, symbols)
+        (m / "paper" / "state.json").write_text(json.dumps(state, indent=1, default=float))
         if not decide:
             return log
         if con.execute("SELECT 1 FROM verdicts WHERE date = ? LIMIT 1", (day,)).fetchone():
