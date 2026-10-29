@@ -244,7 +244,7 @@ def main(out_dir):
     now = datetime.now(timezone.utc)
     log = run(out, con, now)
     print(json.dumps(log, indent=1), flush=True)
-    print(json.dumps(daily.run(con, log, now)), flush=True)
+    print(json.dumps(daily.run(con, log, now, out / "market" / "prices")), flush=True)
 
 
 if __name__ == "__main__":

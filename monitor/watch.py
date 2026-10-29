@@ -25,6 +25,8 @@ ACTIVE = ("app",)
 HOURS = range(7, 19)  # Central; GitHub's cron is UTC, so the schedule over-fires and due() decides
 DROP = -0.10
 LOOKBACK_DAYS = 4  # 8-Ks this recent are checked each run; already-sent ones are repeats (covers weekends, delays)
+DEAL_DAYS = 60  # a holding with no quote and a deal or delisting 8-K this recent is flagged, not a failure
+DEALS = {"2.01": "completed acquisition or sale", "3.01": "delisting notice or listing rule failure"}
 RED_FLAGS = {"1.03": "bankruptcy or receivership", "1.05": "material cybersecurity incident",
              "2.06": "material impairment", "3.01": "delisting notice or listing rule failure",
              "4.01": "change of auditor", "4.02": "past financial statements can no longer be relied on"}
@@ -49,6 +51,22 @@ def filing_alerts(symbol, filings, since):
                     "symbol": symbol, "subject": f"{symbol}: {'red flag 8-K' if flags else 'new 8-K'} ({what})",
                     "text": f"{symbol} filed a {f['form']} on {f['filed']}: {what}.\n{url}", "report": False})
     return out
+
+
+def deal_alert(symbol, filings, since):
+    """A holding whose quote is gone after a deal or delisting 8-K: you confirm how it closed. Cash buyouts aren't
+    closed automatically yet: the price per share paid is in the 8-K text, which code doesn't read (docs/M5.md)."""
+    hits = [f for f in filings
+            if f["filed"] >= since and {i.strip() for i in (f["items"] or "").split(",")} & set(DEALS)]
+    if not hits:
+        return None
+    f = max(hits, key=lambda x: x["filed"])
+    what = "; ".join(f"{i} {DEALS[i]}" for i in DEALS if i in f["items"])
+    return {"key": f"deal:{symbol}:{f['accession']}", "tier": "important", "severity": 1, "symbol": symbol,
+            "subject": f"{symbol}: no quote after a deal 8-K ({what})",
+            "text": f"{symbol} has no live quote, and on {f['filed']} it filed an 8-K with {what}. If it was bought "
+                    "for cash, log the sale at the deal price. If for stock, or it was spun off, log what you got. "
+                    "Nothing changes until you do.", "report": False}
 
 
 def drop_alert(symbol, last, prev, day):
@@ -81,17 +99,23 @@ def gather(held, now, quote=quote, submissions=submissions):
     since = (day - timedelta(days=LOOKBACK_DAYS)).isoformat()
     found, failures = [], []
     for symbol, cik in sorted(held.items()):
+        filings = []
         try:
             if cik is None:
                 raise ValueError("no CIK on the trade, so its filings can't be checked")
-            found += filing_alerts(symbol, submissions(int(cik)), since)
+            filings = submissions(int(cik))
+            found += filing_alerts(symbol, filings, since)
         except Exception as e:
             failures.append(f"{symbol} 8-Ks: {type(e).__name__}: {e}")
         try:
             a = drop_alert(symbol, *quote(symbol), day.isoformat())
             found += [a] if a else []
         except Exception as e:
-            failures.append(f"{symbol} quote: {type(e).__name__}: {e}")
+            deal = deal_alert(symbol, filings, (day - timedelta(days=DEAL_DAYS)).isoformat())
+            if deal:
+                found.append(deal)
+            else:
+                failures.append(f"{symbol} quote: {type(e).__name__}: {e}")
     return found, failures
 
 

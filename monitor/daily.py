@@ -1,10 +1,19 @@
 """The nightly alerts after live scoring (PLAN Step 5 tiers): the daily summary (important) and the drawdown alarm
 (urgent, 20% below the peak: a review, never an automatic sell; one alert per peak, again only if it gets worse).
-Both go through monitor.watch.send, so they follow the same rules and channels as the holdings watch. Text is code-built from the numbers (PLAN Step 4).
+Both go through monitor.watch.send, so they follow the same rules and channels as the holdings watch. Text is
+code-built from the numbers (PLAN Step 4).
+
+Also, for real holdings: a split in the last 14 days of prices is informational; a ratio that isn't a clean split
+(yfinance carries spin-offs that way, monitor.holdings) is important, for you to confirm what you received.
 
 For now the book is the paper one (quant.live); real holdings get the same alarm once trades exist.
 """
-from monitor import watch
+from datetime import date, timedelta
+
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
+
+from monitor import holdings, watch
 
 DRAWDOWN = -20.0  # percent below the peak
 
@@ -14,7 +23,8 @@ def alerts_for(log):
     day, p = log["day"], log.get("paper")
     lines = [f"Scores updated for {log['scored']:,} stocks (close of {day})."]
     if p:
-        lines.append(f"Paper book since {p['since']}: {p['return_pct']:+.2f}% against SPY's {p['spy_return_pct']:+.2f}% "
+        lines.append(f"Paper book since {p['since']}: {p['return_pct']:+.2f}% against SPY's "
+                     f"{p['spy_return_pct']:+.2f}% "
                      f"({p['day_change_pct']:+.2f}% today), {p['positions']} positions, "
                      f"{-p['drawdown_pct']:.1f}% below its peak.")
     else:
@@ -35,9 +45,31 @@ def alerts_for(log):
     return out
 
 
-def run(con, log, now):
+def action_alerts(con, prices_dir, day):
+    """Splits and possible spin-offs on held stocks in the last 14 days of prices."""
+    held = {lot["symbol"] for lot in holdings.holdings(holdings.trades(con), [], day)["lots"]}
+    if not held:
+        return []
+    since = (date.fromisoformat(day) - timedelta(days=14)).isoformat()
+    t = ds.dataset(prices_dir, partitioning="hive").to_table(
+        columns=["symbol", "date", "split"], filter=pc.field("symbol").isin(sorted(held)) & (pc.field("date") >= since)
+        & pc.field("split").is_valid() & (pc.field("split") != 1.0)).to_pandas()
+    out = []
+    for r in t.itertuples():
+        clean = holdings.clean_ratio(r.split)
+        out.append({"key": f"action:{r.symbol}:{r.date}", "tier": "informational" if clean else "important",
+                    "severity": 0 if clean else 1, "symbol": r.symbol,
+                    "subject": f"{r.symbol}: {'split' if clean else 'possible spin-off'} on {r.date}",
+                    "text": f"{r.symbol} shows a {r.split:g} share factor on {r.date}. " + (
+                        "That's a stock split." if clean else
+                        "That isn't a clean split, which is how a spin-off shows up. Log what you received."),
+                    "report": False})
+    return out
+
+
+def run(con, log, now, prices_dir=None):
     failures = []
-    found = alerts_for(log)
+    found = alerts_for(log) + (action_alerts(con, prices_dir, log["day"]) if prices_dir else [])
     sent = watch.send(con, found, now, failures)
     if failures:
         raise SystemExit("nightly alerts failed:\n" + "\n".join(failures))

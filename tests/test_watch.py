@@ -91,3 +91,29 @@ def test_failures_are_loud_but_what_worked_still_goes_out(tmp_path, monkeypatch)
     rows = alerts.history(con)
     assert {h["channel"] for h in rows} == {"email"}  # discord recorded nothing, so the next run tries again
     assert json.loads(con.execute("SELECT body FROM alerts").fetchone()[0])["key"] == "8k:a"
+
+
+def test_a_holding_bought_out_is_flagged_not_a_failure(tmp_path):
+    con = setup(tmp_path)
+
+    def gone(symbol):
+        raise KeyError("currentTradingPeriod")
+
+    log = watch.run(con, at(2026, 10, 26, 10, 0), deliver=lambda ch, msg: None, quote=gone,
+                    submissions=lambda cik: [eightk("z", "2026-10-02", "2.01,3.01,9.01")])
+    assert log["failures"] == [] and log["sent"] == {"app": 1}
+    body = json.loads(con.execute("SELECT body FROM alerts").fetchone()[0])
+    assert body["key"] == "deal:AAPL:z" and body["tier"] == "important" and "bought for cash" in body["text"]
+
+
+def test_splits_and_spin_offs_on_holdings(tmp_path):
+    import pandas as pd
+    from monitor import daily
+    con = setup(tmp_path)
+    d = tmp_path / "prices" / "year=2026"
+    d.mkdir(parents=True)
+    pd.DataFrame({"symbol": ["AAPL", "AAPL", "MSFT"], "date": ["2026-10-20", "2026-10-22", "2026-10-21"],
+                  "split": [4.0, 1.196, 2.0]}).to_parquet(d / "p.parquet")
+    a = daily.action_alerts(con, tmp_path / "prices", "2026-10-26")
+    assert [(x["key"], x["tier"]) for x in a] == [("action:AAPL:2026-10-20", "informational"),
+                                                  ("action:AAPL:2026-10-22", "important")]
