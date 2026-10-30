@@ -1,5 +1,5 @@
-# M5 holdings watch: hourly on weekdays, 7 am to 6 pm Central (monitor.watch). GitHub's cron is UTC and ignores
-# daylight saving, so it fires 12:17 to 00:17 UTC and the job itself skips any hour outside the watch. Shares the
+# M5 holdings watch: hourly on weekdays, 7 am to 6 pm Central (monitor.watch). The scheduler runs in UTC and ignores
+# daylight saving, so it starts the watch 12:17 to 00:17 UTC and the job itself skips any hour outside the watch. Shares the
 # r2-writer group with the nightly run, so the two never write the database at once. Alerts go to the app only for
 # now (monitor.watch.ACTIVE); to switch email and Discord back on, add them there and put SMTP_HOST, SMTP_PORT,
 # SMTP_USER, SMTP_PASSWORD, ALERT_EMAIL_TO and DISCORD_WEBHOOK_URL back in env and the secrets check. Manual runs can
@@ -7,10 +7,7 @@
 name: watch
 run-name: ${{ inputs.by == 'cron' && 'watch (scheduled)' || 'watch' }}
 
-on:
-  schedule:
-    - cron: "17 12-23 * * 1-5"
-    - cron: "17 0 * * 2-6"
+on:  # started by the Cloudflare scheduler (worker/src/scheduler.ts) with by=cron, or by hand
   workflow_dispatch:
     inputs:
       by:

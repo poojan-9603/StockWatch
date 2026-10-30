@@ -4,9 +4,7 @@
 name: weekly
 run-name: ${{ inputs.by == 'cron' && 'weekly (scheduled)' || 'weekly' }}
 
-on:
-  schedule:
-    - cron: "17 15 * * 0"
+on:  # started by the Cloudflare scheduler (worker/src/scheduler.ts) with by=cron, or by hand
   workflow_dispatch:
     inputs:
       by:

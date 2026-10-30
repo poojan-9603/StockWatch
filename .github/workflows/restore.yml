@@ -3,9 +3,7 @@
 name: restore
 run-name: ${{ inputs.by == 'cron' && 'restore (scheduled)' || 'restore' }}
 
-on:
-  schedule:
-    - cron: "17 12 * * 6"
+on:  # started by the Cloudflare scheduler (worker/src/scheduler.ts) with by=cron, or by hand
   workflow_dispatch:
     inputs:
       by:
@@ -24,7 +22,7 @@ jobs:
     steps:
       - id: g
         run: |
-          if { [ "${{ github.event_name }}" != "schedule" ] && [ "${{ inputs.by == 'cron' }}" != "true" ]; } || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "${{ inputs.by == 'cron' }}" != "true" ] || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
   restore:
     needs: gate
     if: needs.gate.outputs.run == 'true'
