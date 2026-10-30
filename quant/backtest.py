@@ -243,7 +243,8 @@ def simulate(d, sc, bench, vix, p, trace=None, final=None):
     bookkeeping. Returns (nav Series, stats dict). trace, if a dict, gets each rebalance day's decisions:
     {day: {"buys": {cik: weight}, "sells": {cik: reason}, "trims": {cik: weight cap}, "keep": [cik], "weights":
     {cik: weight}, "mood_bad", "bar", "nav"}} (quant.live builds the paper verdicts from it). final, if a dict, gets
-    the last day's book: {"day", "weights": {cik: weight}, "cash": share}."""
+    the last day's book: {"day", "weights": {cik: weight}, "cash": share}, plus "vals" ({day: {cik: value}} at each
+    close) and "traded" (total bought and sold, in the book's starting units) for the scoreboard."""
     tr, tro, close = d["tr"], d["tro"], d["close"]
     days = [x for x in close.index if x >= p["start"]]
     tri = (1 + tr.fillna(0)).cumprod()
@@ -287,6 +288,8 @@ def simulate(d, sc, bench, vix, p, trace=None, final=None):
         val = {c: u * tri.at[t, c] for c, u in units.items() if pd.notna(tri.at[t, c])}
         total = cash + sum(val.values())
         nav[t] = total
+        if final is not None:
+            final.setdefault("vals", {})[t] = val
         npos.append(len(units))
         cash_share.append(cash / total)
         if p["stop"]:  # challenger: exit on a fall from the peak since buying of 3 quarterly standard deviations
@@ -365,7 +368,8 @@ def simulate(d, sc, bench, vix, p, trace=None, final=None):
             trace[t] = {"buys": buys, "sells": {c: why[c] for c in sells}, "trims": trims, "keep": list(keep),
                         "weights": w, "mood_bad": mood_bad, "bar": bar, "nav": total}
     if final is not None and days:
-        final.update(day=days[-1], weights={c: v / total for c, v in val.items()}, cash=cash / total)
+        final.update(day=days[-1], weights={c: v / total for c, v in val.items()}, cash=cash / total,
+                     traded=traded)
     nav = pd.Series(nav)
     years = len(nav) / 252
     stats = {"turnover": traded / nav.mean() / years / 2, "avg_positions": float(np.mean(npos)),

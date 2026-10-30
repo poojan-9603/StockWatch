@@ -29,6 +29,11 @@ def run_book(tmp_path):
 
 def test_every_file_passes_the_contract_and_shows_the_paper_book(tmp_path):
     out = run_book(tmp_path)
+    (out / "logs" / "restore").mkdir(parents=True)
+    (out / "logs" / "restore" / "latest.json").write_text('{"date": "2026-11-07", "ok": true}')
+    (out / "logs" / "actions.json").write_text(json.dumps([
+        {"workflowName": "nightly", "event": "schedule", "status": "completed", "conclusion": "failure",
+         "createdAt": f"{site.now_ts()[:10]}T00:00:00Z", "url": "u"}]))
     files = site.build(out)
     data = out / "site" / "data"
     assert {p.relative_to(data).as_posix() for p in data.rglob("*.json")} >= {
@@ -44,7 +49,13 @@ def test_every_file_passes_the_contract_and_shows_the_paper_book(tmp_path):
     assert files["today"]["alerts"][0]["title"] == "Test alert"
     assert files["today"]["status"] == "quiet"  # the Oct 30 decisions are more than 3 days old by Nov 4
     assert files["settings"]["mode"] == "paper" and files["settings"]["test_years_locked"]
-    assert files["reports/monthly"]["since"] == "2026-10-30"
+    m = files["reports/monthly"]
+    assert m["since"] == "2026-10-30" and m["winning"] is None and m["turnover_pct"] > 0
+    assert sum(s["positions"] for s in m["slices"]) == len(h["holdings"])
+    assert files["health"]["last_restore_test"] == {"date": "2026-11-07", "ok": True}
+    broken = files["health"]["checks"][-1]
+    assert broken["outcome"] == "log" and "scheduled run ended in failure" in broken["detail"]
+    assert any("ended in failure" in n for n in m["notes"])
 
 
 def test_before_the_first_month_end_and_on_a_blocked_day(tmp_path):
@@ -56,4 +67,5 @@ def test_before_the_first_month_end_and_on_a_blocked_day(tmp_path):
     assert files["holdings"]["holdings"] == [] and files["today"]["status"] == "blocked"
     assert any("starts at the first month-end" in q["text"] for q in files["today"]["quiet"])
     assert all(p["verdict"] == "Wait" for p in files["picks"]["picks"])
-    assert json.loads((out / "site" / "data" / "health.json").read_text())["status"] == "blocked"
+    health = json.loads((out / "site" / "data" / "health.json").read_text())
+    assert health["status"] == "blocked" and "Not measured tonight" in health["checks"][-1]["detail"]

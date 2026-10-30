@@ -138,6 +138,9 @@ def test_paper_book_every_night_and_the_nightly_alerts(tmp_path):
     pos = state["positions"][0]
     assert pos["bought"] == "2026-10-30" and pos["target_pct"] >= 2 and len(pos["prices"]) > 50
     assert "S&P 500" in state["market"]["note"] and state["nav"][0] == ["2026-10-30", 1.0]
+    sb = state["scoreboard"]
+    assert sb["turnover_pct"] > 0 and abs(sb["costs_pct"] - sb["turnover_pct"] * 2 * 0.001) < 0.01
+    assert sum(s["positions"] for s in sb["slices"].values()) == len(state["positions"])
     found = daily.alerts_for(log)
     assert found[0]["key"] == "summary:2026-11-04" and "Paper book since 2026-10-30" in found[0]["text"]
     assert daily.run(con, log, utc(2026, 11, 5, 1, 17)) == {"alerts": 1, "sent": {"app": 1}}
@@ -146,3 +149,15 @@ def test_paper_book_every_night_and_the_nightly_alerts(tmp_path):
     assert a[1]["tier"] == "urgent" and a[1]["key"].startswith("drawdown:paper:") and "Nothing is sold" in a[1]["text"]
     assert daily.alerts_for({"day": "2026-10-29", "scored": 5})[0]["text"].endswith("starts at the first month-end.")
     assert {h["status"] for h in alerts.history(con)} == {"sent"}
+
+
+def test_scoreboard_slices_compound_from_the_previous_close():
+    days = ["2026-11-02", "2026-11-03", "2026-11-04"]
+    d = {"tr": pd.DataFrame({1: [0.0, 0.10, 0.0], 2: [0.0, -0.02, 0.05]}, index=days)}
+    final = {"vals": {days[0]: {1: 0.5, 2: 0.5}, days[1]: {1: 0.55, 2: 0.49}, days[2]: {1: 0.55, 2: 0.5145}},
+             "traded": 1.0, "weights": {1: 0.5, 2: 0.5}}
+    sb = live.scoreboard(d, final, {1})
+    assert sb["turnover_pct"] == 50.0 and sb["costs_pct"] == 0.1
+    assert sb["slices"]["sp500"] == {"positions": 1, "return_pct": 10.0}
+    assert sb["slices"]["other"] == {"positions": 1, "return_pct": 2.9}
+    assert live.scoreboard(d, final, {1, 2})["slices"]["other"] == {"positions": 0, "return_pct": None}

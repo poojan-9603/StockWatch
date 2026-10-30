@@ -51,3 +51,10 @@ jobs:
             git clone -q git@github.com:poojan-9603/StockWatchBackups.git out/backup_text
       - name: Restore test
         run: python -m pipeline.backup out restore
+      - name: Record the result for the Health screen
+        if: always()
+        run: |
+          ok=false; [ "${{ job.status }}" = "success" ] && ok=true
+          mkdir -p out/logs/restore && printf '{"date": "%s", "ok": %s}\n' "$(date -u +%F)" "$ok" > out/logs/restore/latest.json
+          aws s3 cp out/logs/restore/latest.json "s3://$BUCKET/logs/restore/latest.json" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors

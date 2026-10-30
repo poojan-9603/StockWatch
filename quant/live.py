@@ -183,6 +183,28 @@ def paper_stats(nav, bench, trace):
             "positions": len(last["keep"]) + len(last["buys"])}
 
 
+def scoreboard(d, final, sp500):
+    """Since the start: one-way turnover and trading costs as % of the book, and each slice's return (S&P 500
+    members, everything else), compounded daily from the positions held at the previous close."""
+    vals = final.get("vals", {})
+    days = sorted(vals)
+    out = {"turnover_pct": round(100 * final.get("traded", 0.0) / 2, 2),
+           "costs_pct": round(100 * final.get("traded", 0.0) * bt.FROZEN["cost"], 2), "slices": {}}
+    for name, inside in (("sp500", True), ("other", False)):
+        grow, held_ever = 1.0, False
+        # ponytail: a stock bought or sold at an open counts close to close that day; exact would need intraday fills
+        for a, b in zip(days, days[1:]):
+            held = {c: v for c, v in vals[a].items() if (c in sp500) == inside}
+            tot = sum(held.values())
+            if tot > 0:
+                held_ever = True
+                r = d["tr"].loc[b, list(held)].fillna(0.0)
+                grow *= 1 + float(sum(held[c] * r[c] for c in held)) / tot
+        now = sum(1 for c in final.get("weights", {}) if (c in sp500) == inside)
+        out["slices"][name] = {"positions": now, "return_pct": round(100 * (grow - 1), 2) if held_ever else None}
+    return out
+
+
 def mood(bench, day):
     """The market filter's view on `day`: SPY against its 200-day average, and VIX against FROZEN's level."""
     spy = bench["SPY"].set_index("date")["close"].loc[:day]
@@ -241,7 +263,8 @@ def run(out, con, now, bench=None):
         start = min([sg.shift(day, -HISTORY_DAYS)] + [sg.shift(t, -HISTORY_DAYS) for t in snaps])
         d = load(out, day, symbols, start)
         segs = pd.read_parquet(m / "ticker_map.parquet")
-        sc = score(d, day, list(u["cik"]), set(members(segs, day)["cik"]))
+        sp500 = set(members(segs, day)["cik"])
+        sc = score(d, day, list(u["cik"]), sp500)
         sc = sc.assign(symbol=sc["cik"].map(dict(zip(u["cik"], u["symbol"]))),
                        name=sc["cik"].map(dict(zip(u["cik"], u["name"]))))
         (m / "scores").mkdir(parents=True, exist_ok=True)
@@ -271,6 +294,7 @@ def run(out, con, now, bench=None):
         check_replay(con, trace)  # every night, so revised data shows up the day it happens
         log["paper"] = paper_stats(nav, bench, trace)
         state |= paper_book(d, nav, final, bench, con, day, symbols)
+        state["scoreboard"] = scoreboard(d, final, sp500)
         (m / "paper" / "state.json").write_text(json.dumps(state, indent=1, default=float))
         if not decide:
             return log

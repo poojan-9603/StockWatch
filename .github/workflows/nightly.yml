@@ -20,6 +20,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read  # the broken-app count reads this repo's run history
 
 jobs:
   nightly:
@@ -63,6 +64,7 @@ jobs:
           aws s3 sync "s3://$BUCKET/market/paper" out/market/paper $r2
           aws s3 sync "s3://$BUCKET/market/panel" out/market/panel $r2
           aws s3 sync "s3://$BUCKET/market/quality/daily" out/market/quality/daily $r2
+          aws s3 cp "s3://$BUCKET/logs/restore/latest.json" out/logs/restore/latest.json $r2 || true
           aws s3 cp "s3://$BUCKET/backups/monthly/$(date -u +%Y-%m).sqlite" "out/backups/monthly/$(date -u +%Y-%m).sqlite" $r2 || true
           if aws s3 ls "s3://$BUCKET/db/app.sqlite" --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" >/dev/null; then
             aws s3 cp "s3://$BUCKET/db/app.sqlite" out/db/app.sqlite $r2; echo "FIRST=" >> "$GITHUB_ENV"
@@ -92,6 +94,17 @@ jobs:
       - name: Records and backups
         id: records
         run: python -m pipeline.backup out nightly $FIRST
+      - name: GitHub's run history (the broken-app count, monitor/failures.py)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          since=$(date -u -d '-31 days' +%F); mkdir -p out/logs
+          for w in nightly watch weekly restore prices; do
+            gh run list -R "$GITHUB_REPOSITORY" -w "$w.yml" --created ">=$since" -L 1000 \
+              --json workflowName,event,status,conclusion,createdAt,url
+          done | jq -s add > "$RUNNER_TEMP/actions.json" && mv "$RUNNER_TEMP/actions.json" out/logs/actions.json
       - name: Site data (checked against the contract)
         id: site
         if: always() && steps.records.outcome == 'success' && hashFiles('out/market/paper/state.json') != ''

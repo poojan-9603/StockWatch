@@ -3,6 +3,7 @@ against contract/ before anything is published (pipeline.contract.validate_dir).
 
 Reads:  db/app.sqlite (paper verdicts, alerts, panel_opinions), market/scores/latest.parquet, market/paper/state.json
         (quant.live), market/panel/latest.json (agents.weekly, if any), market/quality/daily/<date>.parquet,
+        logs/actions.json (GitHub's run history, for the broken-app count), logs/restore/latest.json (restore.yml),
         config/settings.json (managed money and mode, edited in the repo for now: docs/M6.md)
 Writes: OUT_DIR/site/data/{today,picks,holdings,settings,health}.json, holding/<cik>.json, reports/{weekly,monthly}.json
 
@@ -20,6 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from monitor import failures
 from pipeline import contract
 from pipeline.db import connect
 from quant import backtest as bt, signals as sg
@@ -217,9 +219,10 @@ def build(out, blocked=None):
                          "quiet_hours": {"start": "21:00", "end": "07:00", "tz": "America/Chicago"},
                          "channels": {"email": False, "discord": False}, "snoozed": [],
                          "llm_cap_usd": float(settings["llm_cap_usd"]), "test_years_locked": True}
-    files["health"] = health(out, con, gen, day, blocked, sym_cik)
+    broken = broken_app(out, con, gen, float(settings["llm_cap_usd"]))
+    files["health"] = health(out, con, gen, day, blocked, sym_cik, broken)
     files["reports/weekly"] = weekly(gen, day, verdicts, panels, latest_v)
-    files["reports/monthly"] = monthly(con, gen, day, state, settings, positions, rows)
+    files["reports/monthly"] = monthly(con, gen, day, state, settings, broken)
     site = out / "site" / "data"
     for name, obj in files.items():
         p = site / f"{name}.json"
@@ -247,14 +250,26 @@ def llm_month(con, month):
     return round(total, 4)
 
 
-def health(out, con, gen, day, blocked, sym_cik):
+def broken_app(out, con, gen, cap):
+    """The broken-app check (monitor.failures) as a Health check row."""
+    name = "Broken-app failures, last 30 days"
+    runs = out / "logs" / "actions.json"
+    if not runs.exists():
+        return {"name": name, "outcome": "log", "detail": "Not measured tonight: GitHub's run history couldn't be read."}
+    found = failures.find(json.loads(runs.read_text()), datetime.fromisoformat(gen.replace("Z", "+00:00")),
+                          llm_month(con, gen[:7]), cap)
+    return {"name": name, "outcome": "log" if found else "pass", "detail": failures.summary(found)}
+
+
+def health(out, con, gen, day, blocked, sym_cik, broken):
     q = out / "market" / "quality" / "daily" / f"{gen[:10]}.parquet"
     issues = pd.read_parquet(q) if q.exists() else pd.DataFrame(columns=["severity", "symbol", "detail", "check"])
     counts = issues["severity"].value_counts().to_dict()
     checks = [{"name": "Price sanity and big moves", "outcome": "quarantine" if counts.get("quarantine") else "pass",
                "detail": f"{counts.get('quarantine', 0)} quarantined, {counts.get('log', 0)} logged"},
               {"name": "Completeness", "outcome": "block" if counts.get("block") else "pass",
-               "detail": blocked or ""}]
+               "detail": blocked or ""}, broken]
+    restore = out / "logs" / "restore" / "latest.json"
     last = lambda sql: (con.execute(sql).fetchone() or [None])[0]
     watch = last("SELECT MAX(created_at) FROM alerts")
     weekly_run = last("SELECT MAX(created_at) FROM panel_opinions")
@@ -273,7 +288,8 @@ def health(out, con, gen, day, blocked, sym_cik):
                             for r in issues[issues["severity"] == "quarantine"].itertuples()
                             if r.symbol in sym_cik and symbol_or_none(r.symbol)],
             "llm_month_usd": llm_month(con, gen[:7]),
-            "last_backup": gen if backup.exists() else None, "last_restore_test": None}
+            "last_backup": gen if backup.exists() else None,
+            "last_restore_test": json.loads(restore.read_text()) if restore.exists() else None}
 
 
 def weekly(gen, day, verdicts, panels, latest_v):
@@ -308,36 +324,53 @@ def stats(series):
     return round(100 * (s.iloc[-1] / s.iloc[0] - 1), 2), sharpe, round(float(100 * -(s / s.cummax() - 1).min()), 2)
 
 
-def monthly(con, gen, day, state, settings, positions, rows):
+def luck(nav, spy, ret, sret):
+    """How much of the gap to SPY is still within luck: the t-statistic of daily returns over SPY's."""
+    days = len(nav)
+    ex = (pd.Series(dict(nav)).pct_change() - pd.Series(dict(spy)).pct_change()).dropna()
+    head = f"{days} trading day{'s' if days != 1 else ''} in"
+    tail = " The plan reviews at 12, 24 and 36 months."
+    if len(ex) < 20 or ex.std() == 0:
+        return f"{head}: far too early to tell skill from luck.{tail}"
+    t, gap = float(ex.mean() / ex.std() * math.sqrt(len(ex))), ret - sret
+    side = "ahead of" if gap >= 0 else "behind"
+    verdict = ("Within luck: it takes a t of about 2 either way to say more." if abs(t) < 2 else
+               "Bigger than luck usually explains, though a few months still say little.")
+    return f"{head}, {abs(gap):.1f} points {side} the S&P 500 (t = {t:.2f}). {verdict}{tail}"
+
+
+def monthly(con, gen, day, state, settings, broken):
     month = day[:7]
     nav, spy, rsp = state.get("nav", []), state.get("spy", []), state.get("rsp", [])
     ret, sharpe, mdd = stats(nav)
     sret, ssharpe, smdd = stats(spy)
     rret = stats(rsp)[0]
+    sb = state.get("scoreboard", {})
+    sl = sb.get("slices", {})
+    # the plan's definition of winning, judged from its first review (12 months); before that it's too early
+    winning = None if len(nav) < 252 else bool(ret > sret and (sharpe or 0) >= (ssharpe or 0) and mdd <= 1.5 * smdd)
     sent = {"urgent": 0, "important": 0, "info": 0}
     for created, tier, body in con.execute("SELECT created_at, tier, body FROM alerts WHERE sent_at IS NOT NULL"):
         if created[:7] == month and json.loads(body).get("status") == "sent":
             sent[TIER[tier]] += 1
-    days = len(nav)
-    large = [p for p in positions if rows.get(p["cik"], {}).get("sp500")]
-    small = [p for p in positions if not rows.get(p["cik"], {}).get("sp500")]
+    slice_ = lambda name, k: {"name": name, "positions": sl.get(k, {}).get("positions", 0),
+                              "return_pct": sl.get(k, {}).get("return_pct"),
+                              "sp500_return_pct": sret if sl.get(k, {}).get("return_pct") is not None else None}
     return {"generated_at": gen, "as_of": day, "month": month, "mode": settings["mode"],
             "since": state.get("since", day), "return_pct": ret, "sp500_return_pct": sret,
             "sp500_equal_return_pct": rret, "sharpe": sharpe, "sp500_sharpe": ssharpe,
-            "max_drawdown_pct": mdd, "sp500_max_drawdown_pct": smdd, "winning": None,
-            "luck_note": f"{days} trading day{'s' if days != 1 else ''} in: far too early to judge. The plan reviews "
-                         "at 12, 24 and 36 months.",
+            "max_drawdown_pct": mdd, "sp500_max_drawdown_pct": smdd, "winning": winning,
+            "luck_note": luck(nav, spy, ret, sret),
             "emergency_brake": bool(mdd > 1.5 * smdd and ret < sret - 10),
-            "turnover_pct": 0.0, "costs_pct": 0.0,
-            "slices": [{"name": "S&P 500 members", "positions": len(large),
-                        "return_pct": None, "sp500_return_pct": None},
-                       {"name": "Outside the S&P 500 (untested)", "positions": len(small),
-                        "return_pct": None, "sp500_return_pct": None},
+            "turnover_pct": sb.get("turnover_pct", 0.0), "costs_pct": sb.get("costs_pct", 0.0),
+            "slices": [slice_("S&P 500 members", "sp500"), slice_("Outside the S&P 500 (untested)", "other"),
                        {"name": "Own picks", "positions": 0, "return_pct": None, "sp500_return_pct": None}],
             "panel_record": {"disagreements": 0, "panel_right": 0, "math_right": 0, "vote_earned": False},
             "alerts_sent": sent, "llm_usd": llm_month(con, month), "llm_cap_usd": float(settings["llm_cap_usd"]),
             "notes": ["Paper mode: the frozen design, filled at the next open after each month-end close.",
-                      "Turnover, costs, slice returns and the panel's record start once there's a month of fills."]}
+                      "Winning is judged from 12 months in, the plan's first review. Before that it shows as too early.",
+                      "The panel's record waits on a rule for when a view counts as right (docs/M7.md).",
+                      f"Broken-app failures: {broken['detail']}"]}
 
 
 def main(out_dir, blocked=None):
