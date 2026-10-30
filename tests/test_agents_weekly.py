@@ -49,6 +49,8 @@ def test_holdings_then_shortlist_numbers_and_records(tmp_path, monkeypatch):
     rows = con.execute("SELECT symbol, verdict, model FROM panel_opinions").fetchall()
     assert [r[0] for r in rows] == ["Z", "A", "C"] and "claude-opus-5-5 judge" in rows[0][2]
     assert rows[2][1] == "Not enough information"  # no documents, no view
+    maths = [json.loads(c)["math"] for (c,) in con.execute("SELECT claims FROM panel_opinions")]
+    assert maths[1:] == ["Buy", "Buy"] and maths[0] in ("Buy", "Hold", "Trim")  # what each view was compared with
 
 
 def test_numbers_are_as_of_the_day_and_never_the_score(tmp_path):

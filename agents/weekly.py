@@ -84,9 +84,9 @@ def stocks(out, con, day, k8):
     return out_stocks
 
 
-def record(con, views, created_at):
-    for v in views:
-        r = panel.row(v, created_at)
+def record(con, views, created_at, todo):
+    for v, s in zip(views, todo):
+        r = panel.row(v, created_at, s["math"])
         con.execute(f"INSERT INTO panel_opinions ({','.join(r)}) VALUES ({','.join('?' * len(r))})", list(r.values()))
     con.commit()
 
@@ -105,7 +105,7 @@ def main(out_dir, client=None):
         import anthropic  # only here, so tests and the pipeline don't need the SDK
         client = anthropic.Anthropic(max_retries=6)
     views = panel.run(client, todo)
-    record(con, views, stamp())
+    record(con, views, stamp(), todo)
     site = [{"cik": s["cik"], "symbol": s["symbol"], "owned": s["owned"],
              "panel": panel.to_contract(v, s["math"], s["docs"])} for s, v in zip(todo, views)]
     (out / "market" / "panel").mkdir(parents=True, exist_ok=True)

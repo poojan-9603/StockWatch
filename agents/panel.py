@@ -173,13 +173,19 @@ def summary(view):
     return f"{n_for} points for, {len(view['claims']) - n_for} against. Readers: {readers}."
 
 
+def agrees(panel_verdict, math_verdict):
+    """Same call on the stock against the S&P 500 (Hold agrees with the math's Buy); None if either makes no call."""
+    p, m = schema.direction(panel_verdict), schema.direction(math_verdict)
+    return None if p is None or m is None else p == m
+
+
 def to_contract(view, math_verdict, stock_docs):
     """The site's "panel" object (contract/common.schema.json), or None when the judge failed."""
     if view["verdict"] is None:
         return None
     by_id = {d["id"]: d for d in stock_docs}
     return {"date": view["date"], "verdict": view["verdict"],
-            "agrees": None if view["verdict"] == schema.NEI else view["verdict"] == math_verdict,
+            "agrees": agrees(view["verdict"], math_verdict),
             "confidence": view["confidence"], "low_confidence": view["low_confidence"], "summary": summary(view),
             "claims": [{"side": c["side"], "text": c["claim"], "quote": c["quote"], "doc_id": c["doc_id"],
                         "doc_title": by_id[c["doc_id"]].get("title", by_id[c["doc_id"]]["source"]),
@@ -188,11 +194,13 @@ def to_contract(view, math_verdict, stock_docs):
             "claims_removed": view["claims_removed"]}
 
 
-def row(view, created_at):
-    """A panel_opinions row (pipeline.db) for the pipeline to append. Failed views are recorded too, never hidden."""
+def row(view, created_at, math_verdict=None):
+    """A panel_opinions row (pipeline.db) for the pipeline to append. Failed views are recorded too, never hidden.
+    math_verdict is what the view was compared with, so the panel's record (quant.live.panel_record) can be settled."""
     return {"date": view["date"], "cik": view["cik"], "symbol": view["symbol"], "verdict": view["verdict"],
             "confidence": view.get("confidence"),
             "claims": json.dumps({"claims": view.get("claims", []), "low_confidence": view.get("low_confidence"),
+                                  "math": math_verdict,
                                   "claims_removed": view.get("claims_removed"),
                                   "removed_claims": view.get("removed_claims", []), "opinions": view["opinions"],
                                   "error": view["error"], "cost": round(view.get("cost", 0.0), 6)}, sort_keys=True),

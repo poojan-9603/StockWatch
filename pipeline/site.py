@@ -339,6 +339,17 @@ def luck(nav, spy, ret, sret):
     return f"{head}, {abs(gap):.1f} points {side} the S&P 500 (t = {t:.2f}). {verdict}{tail}"
 
 
+def panel_note(pr):
+    settled = pr.get("panel_right", 0) + pr.get("math_right", 0)
+    open_ = pr.get("disagreements", 0) - settled - pr.get("unpriced", 0)
+    head = (f"Panel record: {pr.get('disagreements', 0)} disagreements with the math, {settled} settled "
+            f"(the panel right in {pr.get('panel_right', 0)}), {open_} still inside their 3 months")
+    unpriced = f", {pr['unpriced']} with no prices to settle" if pr.get("unpriced") else ""
+    rule = (" It earns a vote with 30 settled and a binomial p under 0.05" +
+            (f" (p = {pr['p_value']:.3f} now)." if settled else "."))
+    return head + unpriced + "." + rule
+
+
 def monthly(con, gen, day, state, settings, broken):
     month = day[:7]
     nav, spy, rsp = state.get("nav", []), state.get("spy", []), state.get("rsp", [])
@@ -347,6 +358,7 @@ def monthly(con, gen, day, state, settings, broken):
     rret = stats(rsp)[0]
     sb = state.get("scoreboard", {})
     sl = sb.get("slices", {})
+    pr = state.get("panel_record", {})
     # the plan's definition of winning, judged from its first review (12 months); before that it's too early
     winning = None if len(nav) < 252 else bool(ret > sret and (sharpe or 0) >= (ssharpe or 0) and mdd <= 1.5 * smdd)
     sent = {"urgent": 0, "important": 0, "info": 0}
@@ -365,11 +377,12 @@ def monthly(con, gen, day, state, settings, broken):
             "turnover_pct": sb.get("turnover_pct", 0.0), "costs_pct": sb.get("costs_pct", 0.0),
             "slices": [slice_("S&P 500 members", "sp500"), slice_("Outside the S&P 500 (untested)", "other"),
                        {"name": "Own picks", "positions": 0, "return_pct": None, "sp500_return_pct": None}],
-            "panel_record": {"disagreements": 0, "panel_right": 0, "math_right": 0, "vote_earned": False},
+            "panel_record": {k: pr.get(k, 0) for k in ("disagreements", "panel_right", "math_right")}
+            | {"vote_earned": bool(pr.get("vote_earned"))},
             "alerts_sent": sent, "llm_usd": llm_month(con, month), "llm_cap_usd": float(settings["llm_cap_usd"]),
             "notes": ["Paper mode: the frozen design, filled at the next open after each month-end close.",
                       "Winning is judged from 12 months in, the plan's first review. Before that it shows as too early.",
-                      "The panel's record waits on a rule for when a view counts as right (docs/M7.md).",
+                      panel_note(pr),
                       f"Broken-app failures: {broken['detail']}"]}
 
 

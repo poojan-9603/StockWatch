@@ -129,3 +129,9 @@ def test_removed_claims_keep_their_reason():
     assert v["removed_claims"] == [{"claim": "Debt is high", "quote": "not in any document", "doc_id": "d2-0",
                                     "side": "against", "reason": "quote"}]
     assert json.loads(panel.row(v, "t")["claims"])["removed_claims"][0]["reason"] == "quote"
+
+
+def test_agreement_is_the_same_call_against_the_sp500():
+    assert panel.agrees("Hold", "Buy") is True and panel.agrees("Trim", "Trim") is True
+    assert panel.agrees("Don't buy", "Buy") is False and panel.agrees("Add", "Trim") is False
+    assert panel.agrees("Wait", "Buy") is None and panel.agrees("Not enough information", "Hold") is None

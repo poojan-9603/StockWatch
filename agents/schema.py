@@ -9,6 +9,14 @@ import json
 NOT_OWNED = ("Buy", "Wait", "Don't buy")
 OWNED = ("Hold", "Add", "Trim", "Sell")
 NEI = "Not enough information"
+# a verdict's call on the stock against the S&P 500 (docs/M7.md); Wait and NEI make no call. The math's own words
+# (Buy, Hold, Trim, Sell) use the same table.
+BULL, BEAR = ("Buy", "Add", "Hold"), ("Don't buy", "Trim", "Sell")
+
+
+def direction(verdict):
+    """1 if the verdict expects the stock to beat the S&P 500, -1 if to lag it, None for no call."""
+    return 1 if verdict in BULL else -1 if verdict in BEAR else None
 KEYS = {"verdict", "confidence", "claims"}
 CLAIM_KEYS = {"claim", "quote", "doc_id"}
 SIDES = ("for", "against")

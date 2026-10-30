@@ -15,6 +15,7 @@ would be a look-ahead. The news check is recorded as not checked (no news source
 Usage: python -m quant.live OUT_DIR
 """
 import json
+import math
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -24,6 +25,7 @@ import pyarrow.compute as pc
 import pyarrow.dataset as ds
 from dateutil.easter import easter
 
+from agents.schema import direction
 from monitor import daily
 from pipeline.db import add_verdict, connect
 from quant import backtest as bt, lock, signals as sg
@@ -31,6 +33,7 @@ from quant.measure import members
 from quant.sectors import gics11
 
 HISTORY_DAYS = 400  # calendar days of prices: 252 trading days for momentum and volatility, with room to spare
+SETTLE_MONTHS, VOTE_MIN, VOTE_P = 3, 30, 0.05  # the panel record rule (docs/M7.md), set before any results
 
 
 def _observed(d):
@@ -205,6 +208,38 @@ def scoreboard(d, final, sp500):
     return out
 
 
+def panel_record(con, d, bench, day):
+    """The panel's record against the math, by the rule set on 2026-10-29 before any results (docs/M7.md).
+
+    A disagreement is a panel view and the math verdict it was shown against making opposite calls on the stock
+    against the S&P 500 (agents.schema.direction). It settles 3 months after the view: the side whose call matched
+    the stock's total return against SPY's was right. One per stock at a time: views of a stock while its
+    disagreement is still open don't count again, so weekly repeats can't inflate the count. The panel earns a vote
+    with at least 30 settled and a one-sided binomial p under 0.05."""
+    tri = (1 + d["tr"].fillna(0)).cumprod()  # a stock whose prices stop stays at its last close (a cash deal)
+    spy = bt.bench_nav(bench, "SPY", list(tri.index))
+    open_until, n, right, wrong, unpriced = {}, 0, 0, 0, 0
+    for t, c, v, extra in con.execute("SELECT date, cik, verdict, claims FROM panel_opinions ORDER BY date, id"):
+        p, m = direction(v), direction(json.loads(extra or "{}").get("math"))
+        if p is None or m is None or p == m or t < open_until.get(c, ""):
+            continue
+        end = (pd.Timestamp(t) + pd.DateOffset(months=SETTLE_MONTHS)).strftime("%Y-%m-%d")
+        open_until[c] = end
+        n += 1
+        if end > day:
+            continue
+        if c not in tri.columns:
+            unpriced += 1
+            continue
+        stock = tri[c].loc[:end].iloc[-1] / tri[c].loc[:t].iloc[-1]
+        beat = stock > spy.loc[:end].iloc[-1] / spy.loc[:t].iloc[-1]
+        right, wrong = (right + 1, wrong) if (1 if beat else -1) == p else (right, wrong + 1)
+    settled = right + wrong
+    pval = sum(math.comb(settled, k) for k in range(right, settled + 1)) / 2 ** settled if settled else 1.0
+    return {"disagreements": n, "panel_right": right, "math_right": wrong, "unpriced": unpriced,
+            "p_value": round(pval, 4), "vote_earned": settled >= VOTE_MIN and pval < VOTE_P}
+
+
 def mood(bench, day):
     """The market filter's view on `day`: SPY against its 200-day average, and VIX against FROZEN's level."""
     spy = bench["SPY"].set_index("date")["close"].loc[:day]
@@ -260,6 +295,9 @@ def run(out, con, now, bench=None):
         symbols = dict(zip(u["symbol"], u["cik"]))
         for s in snaps.values():  # stocks scored at earlier month-ends stay priced for the replay
             symbols |= {k: c for k, c in zip(s["symbol"], s["cik"]) if k not in symbols}
+        for k, c in con.execute("SELECT DISTINCT symbol, cik FROM panel_opinions"):  # and the panel's, to settle
+            if k and c is not None and k not in symbols:
+                symbols[k] = c
         start = min([sg.shift(day, -HISTORY_DAYS)] + [sg.shift(t, -HISTORY_DAYS) for t in snaps])
         d = load(out, day, symbols, start)
         segs = pd.read_parquet(m / "ticker_map.parquet")
@@ -295,6 +333,7 @@ def run(out, con, now, bench=None):
         log["paper"] = paper_stats(nav, bench, trace)
         state |= paper_book(d, nav, final, bench, con, day, symbols)
         state["scoreboard"] = scoreboard(d, final, sp500)
+        state["panel_record"] = panel_record(con, d, bench, day)
         (m / "paper" / "state.json").write_text(json.dumps(state, indent=1, default=float))
         if not decide:
             return log

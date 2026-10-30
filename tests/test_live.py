@@ -161,3 +161,25 @@ def test_scoreboard_slices_compound_from_the_previous_close():
     assert sb["slices"]["sp500"] == {"positions": 1, "return_pct": 10.0}
     assert sb["slices"]["other"] == {"positions": 1, "return_pct": 2.9}
     assert live.scoreboard(d, final, {1, 2})["slices"]["other"] == {"positions": 0, "return_pct": None}
+
+
+def test_panel_record_settles_disagreements_after_3_months(tmp_path):
+    days = [t.strftime("%Y-%m-%d") for t in pd.bdate_range("2026-11-02", "2027-03-31")]
+    tr = pd.DataFrame(0.0, index=days, columns=[1, 2, 3])
+    tr.loc["2026-12-01", [1, 2]] = 0.10  # both beat SPY (flat) over their 3 months
+    d = {"tr": tr}
+    bench = {"SPY": pd.DataFrame({"date": days, "tr": 0.0})}
+    con = connect(tmp_path / "app.sqlite")
+    rows = [("2026-11-02", 1, "Don't buy", "Buy"),   # disagreement: the math was right
+            ("2026-11-09", 1, "Don't buy", "Buy"),   # the same one still open: not counted again
+            ("2026-11-02", 2, "Add", "Trim"),        # disagreement: the panel was right
+            ("2026-11-02", 3, "Hold", "Buy"),        # same call: agrees
+            ("2026-11-02", 3, "Not enough information", "Buy"),
+            ("2026-11-02", 3, "Sell", None),         # no math verdict recorded (a smoke run)
+            ("2027-01-04", 3, "Sell", "Hold")]       # disagreement, still inside its 3 months
+    for t, c, v, m in rows:
+        con.execute("INSERT INTO panel_opinions (date, cik, symbol, verdict, claims, created_at) VALUES (?,?,?,?,?,?)",
+                    (t, c, f"S{c}", v, json.dumps({"math": m}), t))
+    pr = live.panel_record(con, d, bench, "2027-03-01")
+    assert pr == {"disagreements": 3, "panel_right": 1, "math_right": 1, "unpriced": 0, "p_value": 0.75,
+                  "vote_earned": False}
