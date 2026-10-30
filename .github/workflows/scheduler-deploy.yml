@@ -35,5 +35,9 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $DISPATCH_TOKEN" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows")
           [ "$code" = 200 ] || { echo "::error::DISPATCH_TOKEN can't read this repo's Actions (HTTP $code)"; exit 1; }
-      - run: npx wrangler deploy -c scheduler.toml
-      - run: printf '%s' "$DISPATCH_TOKEN" | npx wrangler secret put GITHUB_TOKEN -c scheduler.toml
+      - name: Deploy, then store the token in Cloudflare
+        run: |
+          # the saved account id carries trailing whitespace, which wrangler deploy rejects (Pages doesn't check)
+          export CLOUDFLARE_ACCOUNT_ID=$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')
+          npx wrangler deploy -c scheduler.toml
+          printf '%s' "$DISPATCH_TOKEN" | npx wrangler secret put GITHUB_TOKEN -c scheduler.toml
