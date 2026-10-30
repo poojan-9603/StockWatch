@@ -1,0 +1,12 @@
+# Scheduler Worker (src/scheduler.ts): starts the GitHub jobs at :17 every hour. Deployed by scheduler-deploy.yml,
+# which also stores GITHUB_TOKEN in Cloudflare's secret store. No account ids or secrets in this file.
+name = "stockwatch-scheduler"
+main = "src/scheduler.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[triggers]
+crons = ["17 * * * *"]
+
+[vars]
+REPO = "poojan-9603/StockWatch"

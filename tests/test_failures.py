@@ -53,3 +53,10 @@ def test_nothing_before_the_paper_period_counts():
 def test_llm_over_cap():
     found = failures.find(nightly_every_day(), NOW, llm_usd=10.5, cap=10)
     assert found[0]["job"] == "llm"
+
+
+def test_runs_the_cloudflare_scheduler_started_count_as_scheduled():
+    cron = {**run("2026-11-05", "failure", event="workflow_dispatch"), "displayTitle": "nightly (scheduled)"}
+    by_hand = {**run("2026-11-06", "failure", event="workflow_dispatch"), "displayTitle": "nightly"}
+    found = failures.find(nightly_every_day() + [cron, by_hand], NOW)
+    assert [f["date"] for f in found] == ["2026-11-05"]

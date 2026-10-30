@@ -3,12 +3,17 @@
 # Weekdays 01:17 UTC = 8:17 pm CDT / 7:17 pm CST, after the market and SEC's evening bulk rebuild. Odd minute on
 # purpose: GitHub starts crons late under load, and every step is safe to rerun.
 name: nightly
+run-name: ${{ inputs.by == 'cron' && 'nightly (scheduled)' || 'nightly' }}
 
 on:
   schedule:
     - cron: "17 1 * * 2-6"
   workflow_dispatch:
     inputs:
+      by:
+        description: "Who started it: cron means the Cloudflare scheduler (counts as scheduled)"
+        type: string
+        default: ""
       first_run:
         description: "Create db/app.sqlite (only if R2 has none)"
         type: boolean
@@ -103,7 +108,7 @@ jobs:
           since=$(date -u -d '-31 days' +%F); mkdir -p out/logs
           for w in nightly watch weekly restore prices; do
             gh run list -R "$GITHUB_REPOSITORY" -w "$w.yml" --created ">=$since" -L 1000 \
-              --json workflowName,event,status,conclusion,createdAt,url
+              --json workflowName,displayTitle,event,status,conclusion,createdAt,url
           done | jq -s add > "$RUNNER_TEMP/actions.json" && mv "$RUNNER_TEMP/actions.json" out/logs/actions.json
       - name: Site data (checked against the contract)
         id: site

@@ -2,11 +2,17 @@
 # Batch API. Sundays 15:17 UTC, clear of the nightly (weekdays) and the monthly prices job (Saturdays). Spends real
 # API money (about $1.50 a week; agents.weekly refuses to start if the worst case passes its weekly budget).
 name: weekly
+run-name: ${{ inputs.by == 'cron' && 'weekly (scheduled)' || 'weekly' }}
 
 on:
   schedule:
     - cron: "17 15 * * 0"
   workflow_dispatch:
+    inputs:
+      by:
+        description: "Who started it: cron means the Cloudflare scheduler (counts as scheduled)"
+        type: string
+        default: ""
 
 concurrency:
   group: r2-writer

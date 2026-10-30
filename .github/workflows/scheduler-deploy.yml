@@ -1,0 +1,39 @@
+# Deploy the Cloudflare scheduler Worker (worker/src/scheduler.ts), which starts the core jobs at :17 every hour because
+# GitHub drops most scheduled runs (docs/M7.md). Manual: once, after scheduler code changes, and to replace the token.
+# Copies the DISPATCH_TOKEN GitHub secret into the Worker's Cloudflare secret GITHUB_TOKEN.
+name: scheduler-deploy
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - name: Check secrets
+        run: |
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DISPATCH_TOKEN; do
+            [ -n "${!v}" ] || { echo "::error::secret for $v is missing or empty"; exit 1; }
+          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund && npm test
+      - name: The token can start this repo's runs (lists workflows; starts nothing)
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows")
+          [ "$code" = 200 ] || { echo "::error::DISPATCH_TOKEN can't read this repo's Actions (HTTP $code)"; exit 1; }
+      - run: npx wrangler deploy -c scheduler.toml
+      - run: printf '%s' "$DISPATCH_TOKEN" | npx wrangler secret put GITHUB_TOKEN -c scheduler.toml

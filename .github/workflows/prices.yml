@@ -1,11 +1,17 @@
 # M1 step 5 price backfill. Manual, needs the backfill workflow's market files in R2. Safe to rerun: Tiingo and
 # WIKI fetches checkpoint per symbol in R2 raw/, so a run cut short continues where it stopped.
 name: prices
+run-name: ${{ inputs.by == 'cron' && 'prices (scheduled)' || 'prices' }}
 
 on:
   schedule:
     - cron: "17 9 * * 6"  # first weekend of the month (gate below)
   workflow_dispatch:
+    inputs:
+      by:
+        description: "Who started it: cron means the Cloudflare scheduler (counts as scheduled)"
+        type: string
+        default: ""
 
 concurrency:
   group: r2-writer
@@ -22,7 +28,7 @@ jobs:
     steps:
       - id: g
         run: |
-          if [ "${{ github.event_name }}" != "schedule" ] || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+          if { [ "${{ github.event_name }}" != "schedule" ] && [ "${{ inputs.by == 'cron' }}" != "true" ]; } || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
   prices:
     needs: gate
     if: needs.gate.outputs.run == 'true'

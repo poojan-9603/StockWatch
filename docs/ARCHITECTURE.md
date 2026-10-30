@@ -49,6 +49,8 @@ Only the pipeline ever writes the database. The site reads prepared files, and t
 
 All times Central. GitHub cron runs in UTC and can start late under load, so schedules use odd minutes and every job is safe to rerun.
 
+**Changed 2026-10-30:** GitHub dropped or delayed most scheduled runs (docs/M7.md), so a Cloudflare Worker cron (`worker/src/scheduler.ts`) starts the same jobs at the same times through GitHub's API. It holds one narrow token (start runs on this repo, nothing else).
+
 | Job | When | Does |
 |---|---|---|
 | Nightly | About 7:17 pm, every trading day | Market calendar check, fetch prices and fundamentals, quality checks, scores, verdicts, screen files, inbox, backups, daily summary |

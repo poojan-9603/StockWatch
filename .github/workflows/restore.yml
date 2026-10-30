@@ -1,11 +1,17 @@
 # M2 restore test: the newest daily snapshot from R2 must open cleanly, keep its verdict hash chain, and match the text
 # export in the backup repo row for row. Monthly on the first weekend, and by hand.
 name: restore
+run-name: ${{ inputs.by == 'cron' && 'restore (scheduled)' || 'restore' }}
 
 on:
   schedule:
     - cron: "17 12 * * 6"
   workflow_dispatch:
+    inputs:
+      by:
+        description: "Who started it: cron means the Cloudflare scheduler (counts as scheduled)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -18,7 +24,7 @@ jobs:
     steps:
       - id: g
         run: |
-          if [ "${{ github.event_name }}" != "schedule" ] || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+          if { [ "${{ github.event_name }}" != "schedule" ] && [ "${{ inputs.by == 'cron' }}" != "true" ]; } || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
   restore:
     needs: gate
     if: needs.gate.outputs.run == 'true'
