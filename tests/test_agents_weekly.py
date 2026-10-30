@@ -4,7 +4,7 @@ import json
 
 import pandas as pd
 
-from agents import docs, panel, weekly
+from agents import docs, news, panel, weekly
 from pipeline.db import add_verdict, connect
 from test_agents_panel import client
 
@@ -29,6 +29,8 @@ def setup(tmp_path, monkeypatch):
                               "filing", html=False) for r in rows]
 
     monkeypatch.setattr(panel, "filing_docs", fake_docs)
+    monkeypatch.setenv("FINNHUB_API_KEY", "k")
+    monkeypatch.setattr(news, "news_docs", lambda sym, day, key: seen.append(("news", sym, day, key)) or [])
     (out / "db").mkdir()
     con = connect(out / "db" / "app.sqlite")
     add_verdict(con, date="2026-09-30", cik=9, symbol="Z", verdict="Buy", gates=json.dumps({"book": "paper"}))
@@ -44,7 +46,8 @@ def test_holdings_then_shortlist_numbers_and_records(tmp_path, monkeypatch):
     weekly.main(out, client=client())
     site = json.loads((out / "market" / "panel" / "latest.json").read_text())
     assert [(s["symbol"], s["owned"]) for s in site["stocks"]] == [("Z", True), ("A", False), ("C", False)]
-    assert seen == [["x9"], ["x1"], []]  # only 8-Ks from the last 120 days
+    assert [x for x in seen if isinstance(x, list)] == [["x9"], ["x1"], []]  # only 8-Ks from the last 120 days
+    assert [x for x in seen if isinstance(x, tuple)] == [("news", s, "2026-10-30", "k") for s in ("Z", "A", "C")]
     assert site["stocks"][1]["panel"]["agrees"] is True  # the fake judge says Buy; the math said Buy
     rows = con.execute("SELECT symbol, verdict, model FROM panel_opinions").fetchall()
     assert [r[0] for r in rows] == ["Z", "A", "C"] and "claude-opus-5-5 judge" in rows[0][2]

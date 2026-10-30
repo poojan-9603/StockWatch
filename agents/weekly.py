@@ -2,8 +2,8 @@
 
   holdings   the paper book's positions from its latest month-end verdicts (Buy, Hold, Trim), as owned stocks
   shortlist  the SHORTLIST best-scored stocks that pass FROZEN's buy rule today, not already held
-  documents  each stock's 8-Ks from the last DOC_DAYS (up to MAX_8KS), with their EX-99 press releases. News waits on
-             a Finnhub key, so the news reader has nothing to read for now.
+  documents  each stock's 8-Ks from the last DOC_DAYS (up to MAX_8KS), with their EX-99 press releases, and its
+             Finnhub news up to the day (agents.news). A Finnhub failure stops the run: no panel on missing news.
   numbers    the latest annual figures from our fundamentals (pit.as_of on today), never the math score
 Views go to the panel_opinions table (the pipeline is the one writer) and market/panel/latest.json for the site.
 Refuses to start if MAX_STOCKS * the worst cost per stock could pass WEEK_BUDGET.
@@ -11,6 +11,7 @@ Refuses to start if MAX_STOCKS * the worst cost per stock could pass WEEK_BUDGET
 Usage: python -m agents.weekly OUT_DIR
 """
 import json
+import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -19,7 +20,7 @@ import pandas as pd
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
 
-from agents import panel
+from agents import news, panel
 from pipeline.db import connect, now as stamp
 from quant import backtest as bt, lock
 from quant.measure import COST, REVENUE
@@ -76,11 +77,12 @@ def stocks(out, con, day, k8):
         filter=pc.field("cik").isin(ciks) & (pc.field("filed") <= day)).to_pandas().sort_values(["end", "filed"])
     lock.check(facts["filed"])
     since = (date.fromisoformat(day) - timedelta(days=DOC_DAYS)).isoformat()
-    out_stocks = []
+    key, out_stocks = os.environ["FINNHUB_API_KEY"], []
     for c, sym, owned, math_verdict in want:
         rows = k8[(k8["cik"] == c) & (k8["form"] == "8-K") & (k8["filed"] >= since)].sort_values("filed").tail(MAX_8KS)
         out_stocks.append({"cik": c, "symbol": sym, "date": day, "owned": owned, "math": math_verdict,
-                           "docs": panel.filing_docs(rows.to_dict("records")), "numbers": numbers(facts, c, day)})
+                           "docs": panel.filing_docs(rows.to_dict("records")) + news.news_docs(sym, day, key),
+                           "numbers": numbers(facts, c, day)})
     return out_stocks
 
 
