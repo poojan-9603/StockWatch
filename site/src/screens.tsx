@@ -80,10 +80,17 @@ export function PicksScreen() {
       {(p) => {
         const buys = p.picks.filter((x) => x.verdict === "Buy");
         const rest = p.picks.filter((x) => x.verdict !== "Buy");
+        const total = Math.round(buys.reduce((s, x) => s + (x.size_pct ?? 0), 0));
         return (
           <>
             <h2>{buys.length ? `${buys.length} buy candidate${buys.length === 1 ? "" : "s"}.` : "No buys today."}</h2>
             {p.market_bad_mood && <p className="small">Market mood is poor, so the buy bar is higher and sizes are smaller.</p>}
+            {total > 100 && (
+              <p className="small flag">
+                These sizes add up to {total}% of managed money, more than there is. The design buys the smallest first
+                and the last ones get whatever cash is left, so some fill partly or not at all.
+              </p>
+            )}
             {[...buys, ...rest].map((x) => (
               <Card key={x.cik} title={`${x.symbol} ${x.name}`} verdict={x.verdict} math={x.math} panel={x.panel}>
                 <p className="small">
