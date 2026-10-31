@@ -43,6 +43,11 @@ def symbol_or_none(s):
     return s if isinstance(s, str) and SYMBOL.match(s) else None
 
 
+def text_or(v, default):
+    """v when it's real text; a missing value from pandas is NaN, which `or` would let through."""
+    return v if isinstance(v, str) and v.strip() else default
+
+
 def paper_verdicts(con):
     rows = []
     for d, c, s, v, sc, g in con.execute("SELECT date, cik, symbol, verdict, score, gates FROM verdicts ORDER BY id"):
@@ -131,7 +136,7 @@ def build(out, blocked=None):
         spy_ret = ratio(state["spy"], p["bought"], day) if p.get("bought") else 0.0
         mb = math_block(r, bar, mkt["bad_mood"], True)
         item = {"symbol": symbol_or_none(p["symbol"]) or "UNKNOWN", "cik": p["cik"],
-                "name": r.get("name") or str(p["symbol"]),
+                "name": text_or(r.get("name"), str(p["symbol"])),
                 "verdict": verdict, "own_pick": False, "shares": round(shares, 4), "value_usd": round(val, 2),
                 "weight_pct": p["weight_pct"], "target_pct": p.get("target_pct"),
                 "day_change_pct": p["day_change_pct"], "return_pct": p["return_pct"],
@@ -141,7 +146,7 @@ def build(out, blocked=None):
         bought = p.get("bought") or day
         files[f"holding/{p['cik']}"] = {
             "generated_at": gen, "as_of": day, "symbol": item["symbol"], "cik": p["cik"], "name": item["name"],
-            "sector": r.get("sector") or "Unknown", "verdict": verdict, "own_pick": False, "math": mb,
+            "sector": text_or(r.get("sector"), "Unknown"), "verdict": verdict, "own_pick": False, "math": mb,
             "panel": item["panel"], "flags": [], "horizon": horizon(r), "review_date": review(bought),
             "shares": item["shares"], "value_usd": item["value_usd"], "weight_pct": item["weight_pct"],
             "target_pct": item["target_pct"], "cap_pct": CAP_PCT, "return_pct": item["return_pct"],
@@ -180,8 +185,8 @@ def build(out, blocked=None):
         mb = math_block(r, bar, mkt["bad_mood"], True)
         if verdict == "Wait":
             mb["reasons"].append("Decisions are made at the month-end close (the frozen design rebalances monthly).")
-        pick_items.append({"symbol": r["symbol"], "cik": c, "name": r.get("name") or r["symbol"],
-                           "sector": r.get("sector") or "Unknown", "verdict": verdict, "small_cap": not r.get("sp500"),
+        pick_items.append({"symbol": r["symbol"], "cik": c, "name": text_or(r.get("name"), r["symbol"]),
+                           "sector": text_or(r.get("sector"), "Unknown"), "verdict": verdict, "small_cap": not r.get("sp500"),
                            "catalyst": False, "math": mb, "panel": panels.get(c), "horizon": horizon(r),
                            "review_date": review(day), "size_pct": size, "flags": []})
     files["picks"] = {"generated_at": gen, "as_of": day, "market_bad_mood": mkt["bad_mood"], "picks": pick_items}

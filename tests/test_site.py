@@ -3,6 +3,8 @@ book shows as holdings, the month-end buys show as picks and actions, and app al
 import json
 from datetime import datetime, timezone
 
+import pandas as pd
+
 from monitor import watch
 from pipeline import site
 from pipeline.db import connect
@@ -34,6 +36,8 @@ def test_every_file_passes_the_contract_and_shows_the_paper_book(tmp_path):
     (out / "logs" / "actions.json").write_text(json.dumps([
         {"workflowName": "nightly", "event": "schedule", "status": "completed", "conclusion": "failure",
          "createdAt": f"{site.now_ts()[:10]}T00:00:00Z", "url": "u"}]))
+    sc = out / "market" / "scores" / "latest.parquet"
+    pd.read_parquet(sc).assign(sector=float("nan")).to_parquet(sc)  # no sector known: NaN, as on 2026-10-31
     files = site.build(out)
     data = out / "site" / "data"
     assert {p.relative_to(data).as_posix() for p in data.rglob("*.json")} >= {
@@ -46,6 +50,7 @@ def test_every_file_passes_the_contract_and_shows_the_paper_book(tmp_path):
     assert (data / "holding" / f"{first['cik']}.json").exists()
     assert files[f"holding/{first['cik']}"]["prices"] and files[f"holding/{first['cik']}"]["why_bought"]["score"]
     assert any(p["verdict"] == "Buy" for p in files["picks"]["picks"])
+    assert {p["sector"] for p in files["picks"]["picks"]} == {"Unknown"}
     assert files["today"]["alerts"][0]["title"] == "Test alert"
     assert files["today"]["status"] == "quiet"  # the Oct 30 decisions are more than 3 days old by Nov 4
     assert files["settings"]["mode"] == "paper" and files["settings"]["test_years_locked"]
