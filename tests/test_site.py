@@ -74,3 +74,12 @@ def test_before_the_first_month_end_and_on_a_blocked_day(tmp_path):
     assert all(p["verdict"] == "Wait" for p in files["picks"]["picks"])
     health = json.loads((out / "site" / "data" / "health.json").read_text())
     assert health["status"] == "blocked" and "Not measured tonight" in health["checks"][-1]["detail"]
+
+
+def test_a_blocked_day_right_after_month_end_shows_no_actions(tmp_path):
+    out, bench = market(tmp_path)
+    (out / "db").mkdir()
+    con = connect(out / "db" / "app.sqlite")
+    live.run(out, con, utc(2026, 10, 31, 1, 17), bench=bench)  # the month-end Buys, then a blocked night (2026-11-03)
+    files = site.build(out, blocked="only 0.0% of index stocks priced")
+    assert files["today"]["status"] == "blocked" and files["today"]["actions"] == []

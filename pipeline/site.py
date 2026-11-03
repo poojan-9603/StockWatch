@@ -206,9 +206,10 @@ def build(out, blocked=None):
                        "cik": sym_cik.get(s), "title": subj, "body": b.get("text") or "", "catalyst": False})
         if len(alerts) == 20:
             break
-    acts = [{"symbol": v["symbol"], "cik": v["cik"], "verdict": v["verdict"], "summary": action_text(v)}
-            for v in verdicts if v["date"] >= recent and v["verdict"] in ("Buy", "Sell", "Trim")
-            and symbol_or_none(v["symbol"])]
+    acts = [] if blocked else [  # a blocked day shows no actions (the contract), even right after a month-end
+        {"symbol": v["symbol"], "cik": v["cik"], "verdict": v["verdict"], "summary": action_text(v)}
+        for v in verdicts if v["date"] >= recent and v["verdict"] in ("Buy", "Sell", "Trim")
+        and symbol_or_none(v["symbol"])]
     quiet = [{"kind": "market", "text": mkt["note"], "outcome": None}]
     for p in sorted(positions, key=lambda x: -abs(x["day_change_pct"]))[:5]:
         quiet.append({"kind": "holding", "text": f"{p['symbol']} {p['day_change_pct']:+.1f}% today, "

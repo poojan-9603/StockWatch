@@ -100,7 +100,9 @@ def run_checks(out, log):
                             f"{len(idx & have)} of {len(idx)} index stocks have a price"))
     # the run starts after midnight UTC; the trading day it's for is the US date (UTC minus 6 hours covers EST/EDT)
     us_day = datetime.now(timezone.utc) - timedelta(hours=6)
-    log.update(checks_latest=latest, checks_index_share=round(share, 4),
+    # which day the index stocks' newest bar is on, so a block says why (vendor late, or a dating problem)
+    last_bar = new[new["symbol"].isin(idx)].groupby("symbol")["date"].max().value_counts().head(3)
+    log.update(checks_latest=latest, checks_index_share=round(share, 4), checks_index_last_bar=last_bar.to_dict(),
                checks=pd.Series([i["severity"] for i in issues]).value_counts().to_dict())
     if latest < us_day.strftime("%Y-%m-%d") and us_day.weekday() < 5:
         log["notes"].append(f"no bar for {us_day:%Y-%m-%d} (holiday or vendor delay); latest is {latest}")
