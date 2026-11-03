@@ -6,7 +6,8 @@
              Finnhub news up to the day (agents.news). A Finnhub failure stops the run: no panel on missing news.
   numbers    the latest annual figures from our fundamentals (pit.as_of on today), never the math score
 Views go to the panel_opinions table (the pipeline is the one writer) and market/panel/latest.json for the site.
-Refuses to start if MAX_STOCKS * the worst cost per stock could pass WEEK_BUDGET.
+Reviews as many stocks as WEEK_BUDGET allows at WORST_PER_STOCK, holdings first, fewer when the month's spend so far
+leaves less room under MONTH_CAP, and refuses to start when it leaves none.
 
 Usage: python -m agents.weekly OUT_DIR
 """
@@ -22,13 +23,15 @@ import pyarrow.dataset as ds
 
 from agents import news, panel
 from pipeline.db import connect, now as stamp
+from pipeline.site import llm_month
 from quant import backtest as bt, lock
 from quant.measure import COST, REVENUE
 from quant.pit import as_of, first_available
 
-SHORTLIST, MAX_STOCKS = 10, 30
+SHORTLIST = 10
 DOC_DAYS, MAX_8KS = 120, 3
-WEEK_BUDGET, WORST_PER_STOCK = 3.00, 0.09  # dollars; the smoke runs cost about $0.045 a stock
+# dollars: $2 a week keeps a five-Sunday month under the plan's $10 cap. Sunday 2026-11-01 cost $0.091 a stock (30 stocks).
+WEEK_BUDGET, MONTH_CAP, WORST_PER_STOCK = 2.00, 10.00, 0.09
 FIGURES = {"revenue": REVENUE, "cost of revenue": COST, "net income": ["NetIncomeLoss"],
            "operating income": ["OperatingIncomeLoss"], "total assets": ["Assets"],
            "stockholders' equity": ["StockholdersEquity"]}
@@ -62,15 +65,15 @@ def numbers(facts, cik, day):
     return out
 
 
-def stocks(out, con, day, k8):
-    """The panel's input for this week: owned paper holdings first, then the shortlist."""
+def stocks(out, con, day, k8, most):
+    """The panel's input for this week: owned paper holdings first, then the shortlist, `most` in all."""
     m = out / "market"
     scores = pd.read_parquet(m / "scores" / "latest.parquet")
     held = paper_holdings(con)
     picks = shortlist(scores, held)
     want = [(c, s, True, v) for c, (s, v) in held.items()]
     want += [(int(r.cik), r.symbol, False, "Buy") for r in picks.itertuples()]
-    want = want[:MAX_STOCKS]
+    want = want[:most]
     ciks = sorted({c for c, *_ in want})
     facts = ds.dataset(m / "fundamentals" / "facts.parquet").to_table(
         columns=["cik", "tag", "start", "end", "value", "form", "filed", "accn"],
@@ -94,15 +97,17 @@ def record(con, views, created_at, todo):
 
 
 def main(out_dir, client=None):
-    if MAX_STOCKS * WORST_PER_STOCK > WEEK_BUDGET:
-        raise SystemExit(f"up to ${MAX_STOCKS * WORST_PER_STOCK:.2f} would pass the ${WEEK_BUDGET} weekly budget")
     out = Path(out_dir)
     scores = pd.read_parquet(out / "market" / "scores" / "latest.parquet", columns=["date"])
     day = scores["date"].max()
     con = connect(out / "db" / "app.sqlite")
+    spent = llm_month(con, stamp()[:7])
+    most = int(round(min(WEEK_BUDGET, MONTH_CAP - spent) / WORST_PER_STOCK, 6))
+    if most < 1:
+        raise SystemExit(f"${spent:.2f} spent this month leaves no room under the ${MONTH_CAP} cap")
     with lock.live(day):
         k8 = pd.read_parquet(out / "market" / "filings_8k.parquet")
-        todo = stocks(out, con, day, k8)
+        todo = stocks(out, con, day, k8, most)
     if client is None:
         import anthropic  # only here, so tests and the pipeline don't need the SDK
         client = anthropic.Anthropic(max_retries=6)

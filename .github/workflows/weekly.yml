@@ -1,6 +1,6 @@
 # The agent panel's weekly pass (agents.weekly): paper holdings and the shortlist, Haiku readers, Opus judge,
 # Batch API. Sundays 15:17 UTC, clear of the nightly (weekdays) and the monthly prices job (Saturdays). Spends real
-# API money (about $1.50 a week; agents.weekly refuses to start if the worst case passes its weekly budget).
+# API money (at most $2 a week and $10 a month: agents.weekly reviews fewer stocks to fit, holdings first).
 name: weekly
 run-name: ${{ inputs.by == 'cron' && 'weekly (scheduled)' || 'weekly' }}
 

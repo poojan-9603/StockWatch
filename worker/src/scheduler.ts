@@ -9,7 +9,7 @@ interface Env {
 }
 
 // The old GitHub crons, in UTC (day 0 = Sunday): nightly "17 1 * * 2-6", watch "17 12-23 * * 1-5" and "17 0 * * 2-6",
-// weekly "17 15 * * 0", restore "17 12 * * 6", prices "17 9 * * 6".
+// weekly "17 15 * * 0", restore "17 12 * * 6", prices "17 9 * * 6", backfill "17 6 * * 6".
 export function due(t: Date): string[] {
   const h = t.getUTCHours(), d = t.getUTCDay(), weekday = d >= 1 && d <= 5, tueToSat = d >= 2;
   const jobs: string[] = [];
@@ -18,6 +18,7 @@ export function due(t: Date): string[] {
   if (h === 15 && d === 0) jobs.push("weekly");
   if (h === 12 && d === 6) jobs.push("restore");
   if (h === 9 && d === 6) jobs.push("prices");
+  if (h === 6 && d === 6) jobs.push("backfill");
   return jobs;
 }
 

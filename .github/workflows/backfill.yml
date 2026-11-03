@@ -1,11 +1,15 @@
 # M1 backfill. Manual, safe to rerun: every step rewrites its outputs from scratch.
 # Raw downloads go to R2 even if a later step fails; market/ files only after every step passes.
 name: backfill
+run-name: ${{ inputs.by == 'cron' && 'backfill (scheduled)' || 'backfill' }}
 
-on:
-  schedule:
-    - cron: "17 6 * * 6"  # first weekend of the month (gate below)
+on:  # started by the Cloudflare scheduler (worker/src/scheduler.ts) with by=cron on Saturdays, or by hand
   workflow_dispatch:
+    inputs:
+      by:
+        description: "Who started it: cron means the Cloudflare scheduler (counts as scheduled)"
+        type: string
+        default: ""
 
 concurrency:
   group: r2-writer
@@ -22,7 +26,7 @@ jobs:
     steps:
       - id: g
         run: |
-          if [ "${{ github.event_name }}" != "schedule" ] || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "${{ inputs.by == 'cron' }}" != "true" ] || [ "$(date -u +%d)" -le 7 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
   backfill:
     needs: gate
     if: needs.gate.outputs.run == 'true'

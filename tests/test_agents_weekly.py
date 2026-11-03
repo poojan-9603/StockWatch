@@ -64,3 +64,17 @@ def test_numbers_are_as_of_the_day_and_never_the_score(tmp_path):
     with weekly.lock.live("2026-10-30", today="2026-10-31"):  # live data only inside the live lock
         n = weekly.numbers(f, 1, "2026-10-30")
     assert n == {"revenue (latest reported, USD)": 5e9}  # net income wasn't filed yet
+
+
+def test_budget_caps_the_stocks_holdings_first(tmp_path, monkeypatch):
+    out, con, seen = setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(weekly.lock, "live", lambda day: __import__("contextlib").nullcontext())
+    monkeypatch.setattr(weekly.lock, "check", lambda dates: None)
+    assert int(round(weekly.WEEK_BUDGET / weekly.WORST_PER_STOCK, 6)) * weekly.WORST_PER_STOCK * 5 <= weekly.MONTH_CAP
+    monkeypatch.setattr(weekly, "llm_month", lambda con, month: weekly.MONTH_CAP - 2 * weekly.WORST_PER_STOCK)
+    weekly.main(out, client=client())
+    site = json.loads((out / "market" / "panel" / "latest.json").read_text())
+    assert [s["symbol"] for s in site["stocks"]] == ["Z", "A"]  # room for two this month: the holding, then the best pick
+    monkeypatch.setattr(weekly, "llm_month", lambda con, month: weekly.MONTH_CAP - 0.05)
+    with __import__("pytest").raises(SystemExit, match="no room"):
+        weekly.main(out, client=client())

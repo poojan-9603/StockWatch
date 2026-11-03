@@ -5,7 +5,7 @@ import { dispatch, due } from "../src/scheduler.ts";
 const at = (iso: string) => due(new Date(iso));
 
 test("due matches the old GitHub crons, hour by hour, for a whole week", () => {
-  const want: Record<string, number> = { nightly: 5, watch: 65, weekly: 1, restore: 1, prices: 1 };
+  const want: Record<string, number> = { nightly: 5, watch: 65, weekly: 1, restore: 1, prices: 1, backfill: 1 };
   const got: Record<string, number> = {};
   for (let h = 0; h < 24 * 7; h++)
     for (const j of due(new Date(Date.UTC(2026, 10, 1, h, 17)))) got[j] = (got[j] ?? 0) + 1; // Sun Nov 1 to Sat Nov 7
@@ -16,6 +16,7 @@ test("due matches the old GitHub crons, hour by hour, for a whole week", () => {
   assert.deepEqual(at("2026-11-07T12:17:00Z"), ["restore"]); // Saturday: restore, no watch
   assert.deepEqual(at("2026-11-01T15:17:00Z"), ["weekly"]);
   assert.deepEqual(at("2026-11-07T09:17:00Z"), ["prices"]);
+  assert.deepEqual(at("2026-11-07T06:17:00Z"), ["backfill"]);
 });
 
 test("dispatch sends by=cron, retries, then fails loudly", async () => {
