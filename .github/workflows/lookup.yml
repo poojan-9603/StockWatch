@@ -1,0 +1,51 @@
+# Read only: print the latest scores (the seven signal ranks, score, signals above 60) for a few symbols, to answer
+# "why isn't X a pick". By hand from the Actions tab. Writes nothing.
+name: lookup
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Symbols, space separated (e.g. NVDA AMD)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      SYMBOLS: ${{ inputs.symbols }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -q pandas pyarrow
+      - name: Scores
+        run: |
+          aws s3 cp "s3://$BUCKET/market/scores/latest.parquet" latest.parquet \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --only-show-errors
+          python - <<'EOF'
+          import os
+          import pandas as pd
+          s = pd.read_parquet("latest.parquet")
+          s["rank_of"] = s["score"].rank(ascending=False).astype("Int64").astype(str) + f" of {s['score'].notna().sum()}"
+          cols = ["symbol", "date", "score", "rank_of", "n60", "momentum", "quality", "value", "low_volatility",
+                  "earnings_surprise", "issuance", "asset_growth", "sector"]
+          want = os.environ["SYMBOLS"].upper().split()
+          pd.set_option("display.width", 250)
+          print(s[s["symbol"].isin(want)][[c for c in cols if c in s.columns]].round(1).to_string(index=False))
+          missing = set(want) - set(s["symbol"])
+          if missing:
+              print("not in the universe or not scored:", sorted(missing))
+          EOF
