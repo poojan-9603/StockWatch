@@ -8,12 +8,12 @@ interface Env {
   REPO: string; // owner/name
 }
 
-// The old GitHub crons, in UTC (day 0 = Sunday): nightly "17 1 * * 2-6", watch "17 12-23 * * 1-5" and "17 0 * * 2-6",
-// weekly "17 15 * * 0", restore "17 12 * * 6", prices "17 9 * * 6", backfill "17 6 * * 6".
+// The old GitHub crons, in UTC (day 0 = Sunday): nightly "17 3 * * 2-6" (01:17 until 2026-11-05),
+// watch "17 12-23 * * 1-5" and "17 0 * * 2-6", weekly "17 15 * * 0", restore "17 12 * * 6", prices "17 9 * * 6", backfill "17 6 * * 6".
 export function due(t: Date): string[] {
   const h = t.getUTCHours(), d = t.getUTCDay(), weekday = d >= 1 && d <= 5, tueToSat = d >= 2;
   const jobs: string[] = [];
-  if (h === 1 && tueToSat) jobs.push("nightly");
+  if (h === 3 && tueToSat) jobs.push("nightly"); // 03:17: Yahoo leaves the close blank until about 02:20 (docs/M2.md)
   if ((h >= 12 && weekday) || (h === 0 && tueToSat)) jobs.push("watch");
   if (h === 15 && d === 0) jobs.push("weekly");
   if (h === 12 && d === 6) jobs.push("restore");

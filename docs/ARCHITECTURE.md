@@ -53,7 +53,7 @@ All times Central. GitHub cron runs in UTC and can start late under load, so sch
 
 | Job | When | Does |
 |---|---|---|
-| Nightly | About 7:17 pm, every trading day | Market calendar check, fetch prices and fundamentals, quality checks, scores, verdicts, screen files, inbox, backups, daily summary |
+| Nightly | About 9:17 pm (10:17 pm in summer), every trading day. Was 7:17 pm until 2026-11-05: Yahoo leaves the day's close blank until about 9:20 pm New York time | Market calendar check, fetch prices and fundamentals, quality checks, scores, verdicts, screen files, inbox, backups, daily summary |
 | Holdings watch | Hourly, about 8 am to 6 pm, weekdays | New 8-Ks, headlines, live quotes for holdings; urgent alerts; inbox |
 | Weekly | Weekend | Agent panel batch on shortlist and holdings, weekly report |
 | Monthly | First weekend | Universe rebuild, monthly report, restore test, reconciliation reminder |

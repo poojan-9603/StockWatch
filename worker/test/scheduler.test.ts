@@ -10,8 +10,9 @@ test("due matches the old GitHub crons, hour by hour, for a whole week", () => {
   for (let h = 0; h < 24 * 7; h++)
     for (const j of due(new Date(Date.UTC(2026, 10, 1, h, 17)))) got[j] = (got[j] ?? 0) + 1; // Sun Nov 1 to Sat Nov 7
   assert.deepEqual(got, want);
-  assert.deepEqual(at("2026-11-03T01:17:00Z"), ["nightly"]); // Tuesday 01:17, Monday's nightly
-  assert.deepEqual(at("2026-11-02T01:17:00Z"), []); // Monday 01:17: no Sunday nightly
+  assert.deepEqual(at("2026-11-03T03:17:00Z"), ["nightly"]); // Tuesday 03:17, Monday's nightly
+  assert.deepEqual(at("2026-11-03T01:17:00Z"), []); // not 01:17 any more
+  assert.deepEqual(at("2026-11-02T03:17:00Z"), []); // Monday 03:17: no Sunday nightly
   assert.deepEqual(at("2026-11-07T00:17:00Z"), ["watch"]); // Saturday 00:17 is Friday 7 pm Central
   assert.deepEqual(at("2026-11-07T12:17:00Z"), ["restore"]); // Saturday: restore, no watch
   assert.deepEqual(at("2026-11-01T15:17:00Z"), ["weekly"]);
