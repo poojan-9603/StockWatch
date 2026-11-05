@@ -8,6 +8,7 @@
     "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
     "as_of": {"$ref": "common.schema.json#/$defs/date"},
     "market_bad_mood": {"description": "Buy bar raised and new positions smaller.", "type": "boolean"},
+    "decided": {"description": "The month-end close the Buys come from (the paper book bought them at the next open). Null before the first.", "anyOf": [{"$ref": "common.schema.json#/$defs/date"}, {"type": "null"}]},
     "picks": {
       "type": "array",
       "items": {
@@ -36,5 +37,5 @@
       }
     }
   },
-  "required": ["generated_at", "as_of", "market_bad_mood", "picks"]
+  "required": ["generated_at", "as_of", "market_bad_mood", "decided", "picks"]
 }

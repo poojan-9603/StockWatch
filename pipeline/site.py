@@ -189,7 +189,8 @@ def build(out, blocked=None):
                            "sector": text_or(r.get("sector"), "Unknown"), "verdict": verdict, "small_cap": not r.get("sp500"),
                            "catalyst": False, "math": mb, "panel": panels.get(c), "horizon": horizon(r),
                            "review_date": review(day), "size_pct": size, "flags": []})
-    files["picks"] = {"generated_at": gen, "as_of": day, "market_bad_mood": mkt["bad_mood"], "picks": pick_items}
+    files["picks"] = {"generated_at": gen, "as_of": day, "market_bad_mood": mkt["bad_mood"], "decided": last_decision,
+                      "picks": pick_items}
 
     # today
     sym_cik = {r["symbol"]: int(c) for c, r in rows.items() if isinstance(r.get("symbol"), str)}

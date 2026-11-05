@@ -83,7 +83,12 @@ export function PicksScreen() {
         const total = Math.round(buys.reduce((s, x) => s + (x.size_pct ?? 0), 0));
         return (
           <>
-            <h2>{buys.length ? `${buys.length} buy candidate${buys.length === 1 ? "" : "s"}.` : "No buys today."}</h2>
+            <h2>{buys.length ? `${buys.length} buy${buys.length === 1 ? "" : "s"} from the ${p.decided} month-end.` : "No buys this month."}</h2>
+            <p className="small">
+              {buys.length > 0 && "The paper book bought these at the next open, so they're in Holdings now. "}
+              The design decides once a month, at the month-end close, so this list stays the same until the end of the
+              month. A stock that drops in between isn't re-checked for a buy until then.
+            </p>
             {p.market_bad_mood && <p className="small">Market mood is poor, so the buy bar is higher and sizes are smaller.</p>}
             {total > 100 && (
               <p className="small flag">

@@ -51,6 +51,7 @@ def test_every_file_passes_the_contract_and_shows_the_paper_book(tmp_path):
     assert files[f"holding/{first['cik']}"]["prices"] and files[f"holding/{first['cik']}"]["why_bought"]["score"]
     assert any(p["verdict"] == "Buy" for p in files["picks"]["picks"])
     assert {p["sector"] for p in files["picks"]["picks"]} == {"Unknown"}
+    assert files["picks"]["decided"] == "2026-10-30"  # the month-end the Buys come from, shown on the page
     assert files["today"]["alerts"][0]["title"] == "Test alert"
     assert files["today"]["status"] == "quiet"  # the Oct 30 decisions are more than 3 days old by Nov 4
     assert files["settings"]["mode"] == "paper" and files["settings"]["test_years_locked"]
