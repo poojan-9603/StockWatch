@@ -29,6 +29,14 @@ At 15%, 25% and 30% the picture is the same. The 25% and 30% groups get small (9
 5. **Even the best group often kept falling.** 1 in 4 tech-leader dips fell another 10% within 3 months, and 4 in 10 within a year.
 6. **Not covered:** 2020 onward (locked), so neither the 2020 crash nor 2022's tech bear market is in here. 2013 to 2019 was mostly a rising market, which flatters buying dips.
 
-## Decision
+## Decision (2026-11-06)
 
-Waiting on you. The numbers don't support telling you a leader is "buyable again" because it fell 20 to 25%. They do support a watch that says plainly what history shows.
+You chose to build it as a heads-up. The numbers don't support telling you a leader is "buyable again" because it fell 20 to 25%, so the watch says what history showed instead.
+
+**How the watch works** (every night, latest day only, inside the live lock):
+
+- `quant.live` writes today's 100 biggest S&P 500 companies, defined as in the study, with their drawdown from the 1-year high, to `market/scores/leaders.parquet`.
+- `pipeline/site.py` keeps the ones 20% or more below their high that are in a strong industry or one of your themes. Themes are in `config/settings.json` (`dip_themes`), as SIC code prefixes or tickers. They start as chips and electronics (367), computers (357) and software and internet (737), the study's tech group.
+- Each one shows on Picks under "Big leaders down from their high", with the study's 20% numbers for its group: tech leaders, leaders in strong industries, or the biggest companies overall. A stock newly over the line since the day before is marked "New" and named on Today.
+
+**Limits:** the odds are from 2013 to 2019 only. "AI" has no industry code, so it means the three tech codes plus any tickers you add. A stock whose day has quarantined data is left out.

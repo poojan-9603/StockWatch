@@ -1,7 +1,7 @@
 """The site's data files (ARCHITECTURE "Data contract"), built from the records and the nightly's outputs, checked
 against contract/ before anything is published (pipeline.contract.validate_dir).
 
-Reads:  db/app.sqlite (paper verdicts, alerts, panel_opinions), market/scores/latest.parquet, market/paper/state.json
+Reads:  db/app.sqlite (paper verdicts, alerts, panel_opinions), market/scores/{latest,leaders}.parquet, market/paper/state.json
         (quant.live), market/panel/latest.json (agents.weekly, if any), market/quality/daily/<date>.parquet,
         logs/actions.json (GitHub's run history, for the broken-app count), logs/restore/latest.json (restore.yml),
         config/settings.json (managed money and mode, edited in the repo for now: docs/M6.md)
@@ -24,7 +24,7 @@ import pandas as pd
 from monitor import failures
 from pipeline import contract
 from pipeline.db import connect
-from quant import backtest as bt, signals as sg
+from quant import backtest as bt, dips, signals as sg
 
 ROOT = Path(__file__).resolve().parent.parent
 SYMBOL = re.compile(r"^[A-Z][A-Z0-9.-]{0,9}$")
@@ -194,8 +194,9 @@ def build(out, blocked=None):
                            "horizon": horizon(r), "review_date": review(day), "size_pct": round(100 * size, 2),
                            "new_today": prev is not None and c not in prev, "flags": []})
     new_picks = [p["symbol"] for p in pick_items if p["new_today"]]
+    dip_items = leader_dips(m / "scores" / "leaders.parquet", rows, settings.get("dip_themes", {}))
     files["picks"] = {"generated_at": gen, "as_of": day, "market_bad_mood": mkt["bad_mood"], "decided": last_decision,
-                      "picks": pick_items}
+                      "picks": pick_items, "dips": dip_items}
 
     # today
     sym_cik = {r["symbol"]: int(c) for c, r in rows.items() if isinstance(r.get("symbol"), str)}
@@ -219,6 +220,11 @@ def build(out, blocked=None):
     quiet = [{"kind": "market", "text": mkt["note"], "outcome": None}]
     if new_picks:
         quiet.append({"kind": "change", "text": f"New on Picks today: {', '.join(new_picks)}.", "outcome": None})
+    new_dips = [f"{x['symbol']} ({x['below_high_pct']:.0f}%)" for x in dip_items if x["new_today"]]
+    if new_dips:
+        quiet.append({"kind": "change", "text": f"Big leaders newly 20% or more below their 1-year high: "
+                                                f"{', '.join(new_dips)}. What history shows is on Picks.",
+                      "outcome": None})
     for p in sorted(positions, key=lambda x: -abs(x["day_change_pct"]))[:5]:
         quiet.append({"kind": "holding", "text": f"{p['symbol']} {p['day_change_pct']:+.1f}% today, "
                                                  f"{p['return_pct']:+.1f}% since bought.", "outcome": None})
@@ -245,6 +251,37 @@ def build(out, blocked=None):
     n = contract.validate_dir(site)
     print(f"site data: {n} files checked against the contract, as of {day}")
     return files
+
+
+def leader_dips(f, rows, themes):
+    """The leader-dip watch (PLAN changes 2026-11-05, docs/DIPS.md): today's 100 biggest S&P 500 companies that are in
+    a strong industry or one of the themes (config/settings.json dip_themes: SIC code prefixes or tickers) and at
+    least dips.WATCH below their 1-year high, each with what the 2013 to 2019 study measured for its group. A heads-up,
+    not a verdict: the study found no buy signal in a dip."""
+    if not f.exists():
+        return []
+    out = []
+    for r in pd.read_parquet(f).sort_values("drawdown").itertuples():
+        row = rows.get(int(r.cik), {})
+        sym, sic = symbol_or_none(row.get("symbol")), str(r.sic)
+        hit = [t for t, codes in themes.items() for c in codes if (sic.startswith(c) if c.isdigit() else c == sym)]
+        if sym is None or pd.isna(r.drawdown) or r.drawdown > -dips.WATCH or not (hit or r.strong):
+            continue
+        k = "tech" if r.tech else "strong" if r.strong else "leader"
+        h = dips.MEASURED[k]
+        why = (f"Theme: {hit[0]}." if hit else "") + (" " if hit and r.strong else "") +               (f"Its industry ({text_or(row.get('sector'), 'Unknown')}) is in the strongest third over 12 months."
+               if r.strong else "")
+        text = (f"From 2013 to 2019, {h['dips']} dips like this in {h['who']} beat the S&P 500 over the next 3 months "
+                f"{h['beat']}% of the time (average {h['avg']:+.1f}%), and {h['fell']}% fell another 10% first.")
+        if k == "tech":
+            text += f" With no dip at all, tech leaders beat it {h['base_beat']}% of the time, so most of that was tech's decade."
+        else:
+            text += " That's about a coin flip: the dip itself added nothing."
+        out.append({"symbol": sym, "cik": int(r.cik), "name": text_or(row.get("name"), sym),
+                    "below_high_pct": round(-100 * float(r.drawdown), 1),
+                    "new_today": bool(pd.isna(r.drawdown_prev) or r.drawdown_prev > -dips.WATCH),
+                    "why": why.strip(), "history": text})
+    return out
 
 
 def action_text(v):

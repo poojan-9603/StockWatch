@@ -34,9 +34,30 @@ DIPS = [0.15, 0.20, 0.25, 0.30]
 HORIZONS = {"3m": 63, "6m": 126, "12m": 252}
 TECH = ("357", "367", "737")
 
+# The live watch (PLAN changes 2026-11-05): leaders WATCH or more below their 1-year high. MEASURED is this study's
+# 20% row from run 42155619341 (docs/DIPS.md), 2013 to 2019, shown next to every dip so the watch says what history
+# showed and not more. Rerunning the study on the same years can update it; 2020 on stays locked.
+WATCH = 0.20
+MEASURED = {"tech": {"who": "big tech leaders", "dips": 36, "beat": 69, "avg": 4.8, "fell": 25, "base_beat": 57},
+            "strong": {"who": "big companies in strong industries", "dips": 59, "beat": 54, "avg": 0.2, "fell": 31},
+            "leader": {"who": "the biggest companies", "dips": 200, "beat": 51, "avg": 0.2, "fell": 36}}
+
 
 def tri_of(tr, close):
     return (1 + tr.fillna(0)).cumprod().where(close.notna())
+
+
+def industry_flags(ciks, mv, r12, sic):
+    """DataFrame(cik: leader, strong, tech) for one day's S&P 500 members: mv and r12 are Series by cik."""
+    f = pd.DataFrame({"mv": mv.reindex(ciks).values, "r12": r12.reindex(ciks).values,
+                      "sic2": sic.reindex(ciks).str[:2].values, "tech": sic.reindex(ciks).str[:3].isin(TECH).values},
+                     index=ciks)
+    ind = f.groupby("sic2")["r12"].agg(["mean", "count"])
+    ind = ind[ind["count"] >= MIN_INDUSTRY]["mean"]
+    strong = set(ind[ind.rank(pct=True) > TOP_THIRD].index)
+    f["leader"] = f["mv"].rank(ascending=False) <= LEADERS
+    f["strong"] = f["sic2"].isin(strong)
+    return f[["leader", "strong", "tech"]]
 
 
 def monthly_flags(d, tri, sic):
@@ -48,18 +69,27 @@ def monthly_flags(d, tri, sic):
         ciks = [c for c in bt.members(d["segs"], m)["cik"] if c in d["close"].columns and pd.notna(d["close"].at[m, c])]
         mv = sg.raw(m, ciks, d["close"], d["tr"], d["facts"], eq, splits, multi)["mv"]
         i = days.index(m)
-        r12 = tri.iloc[i][ciks] / tri.iloc[max(i - 252, 0)][ciks] - 1
-        f = pd.DataFrame({"mv": mv, "r12": r12, "sic2": sic.reindex(ciks).str[:2].values,
-                          "tech": sic.reindex(ciks).str[:3].isin(TECH).values}, index=ciks)
-        ind = f.groupby("sic2")["r12"].agg(["mean", "count"])
-        ind = ind[ind["count"] >= MIN_INDUSTRY]["mean"]
-        strong = set(ind[ind.rank(pct=True) > TOP_THIRD].index)
-        f["leader"] = f["mv"].rank(ascending=False) <= LEADERS
-        f["strong"] = f["sic2"].isin(strong)
-        out[m] = f[["leader", "strong", "tech"]]
-        print(f"  {m}: {len(ciks)} members, {int(f['leader'].sum())} leaders, {len(strong)} strong industries",
-              flush=True)
+        f = industry_flags(ciks, mv, tri.iloc[i][ciks] / tri.iloc[max(i - 252, 0)][ciks] - 1, sic)
+        out[m] = f
+        print(f"  {m}: {len(ciks)} members, {int(f['leader'].sum())} leaders, {int(f['strong'].sum())} in strong "
+              "industries", flush=True)
     return out
+
+
+def leaders_today(d, day, sp500, sic):
+    """The live watch's input (call inside lock.live(day), the latest day only): today's 100 biggest S&P 500 members,
+    defined as in the study, with strong and tech, and the drawdown from the 1-year high today and the trading day
+    before. A stock whose day is quarantined is left out (bad data blocks, hard rule 5)."""
+    tri = tri_of(d["tr"], d["close"])
+    ciks = [c for c in sorted(sp500) if c in tri.columns and pd.notna(d["close"].at[day, c])
+            and (c, day) not in d["blocked"]]
+    eq, splits, multi = sg.eps_quarters(d["facts"]), sg.splits_table(d["p"]), sg.multi_class(d["facts"])
+    mv = sg.raw(day, ciks, d["close"], d["tr"], d["facts"], eq, splits, multi)["mv"]
+    i = list(tri.index).index(day)
+    f = industry_flags(ciks, mv, tri.iloc[i][ciks] / tri.iloc[max(i - 252, 0)][ciks] - 1, sic)
+    dd = tri[ciks] / tri[ciks].rolling(252, min_periods=200).max() - 1
+    f = f.assign(drawdown=dd.iloc[i].values, drawdown_prev=dd.iloc[i - 1].values, sic=sic.reindex(ciks).values)
+    return f[f["leader"]].drop(columns="leader").rename_axis("cik").reset_index()
 
 
 def events(d, tri, flags):

@@ -3,6 +3,8 @@
 Every night, for the latest trading day only (inside quant.lock.live, hard rule 1):
   scores    the seven signals and the re-ranked score for every stock in the live universe (PLAN Step 1), ranked
             across all of it -> market/scores/latest.parquet, for the site and the panel. Not a record.
+  leaders   the 100 biggest S&P 500 members, their industry flags and drawdown from the 1-year high (quant.dips)
+            -> market/scores/leaders.parquet, for the leader-dip watch on the site. Not a record.
 On the month's last trading day, if the data is current (FROZEN rebalances monthly):
   snapshot  that day's scores -> market/scores/month_end/<day>.parquet, written once and never changed
   paper     quant.backtest.simulate replays FROZEN from the first snapshot over every snapshot, so the paper
@@ -28,7 +30,7 @@ from dateutil.easter import easter
 from agents.schema import direction
 from monitor import daily
 from pipeline.db import add_verdict, connect
-from quant import backtest as bt, lock, signals as sg
+from quant import backtest as bt, dips, lock, signals as sg
 from quant.measure import members
 from quant.sectors import gics11
 
@@ -122,7 +124,7 @@ def load(out, day, symbols, since):
         & pc.field("cik").isin(sorted(set(symbols.values())))).to_pandas().sort_values(["end", "filed"])
     lock.check(facts["filed"])
     return dict(p=p, close=wide["close"], tr=wide["tr"], tro=wide["tro"], blocked=blocked, ended=ended,
-                failed=failed, sector=co["sic"].map(gics11), facts=facts)
+                failed=failed, sector=co["sic"].map(gics11), sic=co["sic"].astype("string"), facts=facts)
 
 
 def score(d, day, ciks, sp500):
@@ -308,6 +310,9 @@ def run(out, con, now, bench=None):
         (m / "scores").mkdir(parents=True, exist_ok=True)
         sc.to_parquet(m / "scores" / "latest.parquet", index=False)
         log["scored"] = int(sc["score"].notna().sum())
+        lead = dips.leaders_today(d, day, sp500, d["sic"])  # the leader-dip watch's input (docs/DIPS.md)
+        lead.to_parquet(m / "scores" / "leaders.parquet", index=False)
+        log["leaders_down_20"] = int((lead["drawdown"] <= -dips.WATCH).sum())
         decide = month_end(day)
         if decide and not current(day, now):
             log["notes"].append(f"{day} is a month-end but its data arrived late: no decisions this month")

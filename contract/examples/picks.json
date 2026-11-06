@@ -180,5 +180,16 @@
     "Hidden twin: correlation 0.83 with CCC."
    ]
   }
+ ],
+ "dips": [
+  {
+   "symbol": "DDD",
+   "cik": 4,
+   "name": "Delta Sample Inc.",
+   "below_high_pct": 22.4,
+   "new_today": true,
+   "why": "Theme: chips and electronics (AI hardware).",
+   "history": "From 2013 to 2019, 36 dips like this in big tech leaders beat the S&P 500 over the next 3 months 69% of the time (average +4.8%), and 25% fell another 10% first. With no dip at all, tech leaders beat it 57% of the time, so most of that was tech's decade."
+  }
  ]
 }

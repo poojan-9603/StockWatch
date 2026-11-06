@@ -64,6 +64,7 @@ jobs:
           aws s3 sync "s3://$BUCKET/market/scores/month_end" out/market/scores/month_end $r2
           # last night's scores, paper state and panel views, so the site still builds if scoring can't run tonight
           aws s3 cp "s3://$BUCKET/market/scores/latest.parquet" out/market/scores/latest.parquet $r2 || true
+          aws s3 cp "s3://$BUCKET/market/scores/leaders.parquet" out/market/scores/leaders.parquet $r2 || true
           aws s3 sync "s3://$BUCKET/market/paper" out/market/paper $r2
           aws s3 sync "s3://$BUCKET/market/panel" out/market/panel $r2
           aws s3 sync "s3://$BUCKET/market/quality/daily" out/market/quality/daily $r2

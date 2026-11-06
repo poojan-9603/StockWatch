@@ -2,5 +2,10 @@
   "mode": "paper",
   "managed_usd": 10000,
   "llm_cap_usd": 10,
-  "_note": "Edit in the repo (docs/M6.md). managed_usd sizes the paper book in dollars; change it any time."
+  "dip_themes": {
+    "chips and electronics (AI hardware)": ["367"],
+    "computers and hardware": ["357"],
+    "software and internet (AI software)": ["737"]
+  },
+  "_note": "Edit in the repo (docs/M6.md). managed_usd sizes the paper book in dollars; change it any time. dip_themes: the leader-dip watch's themes (docs/DIPS.md), each a list of SIC code prefixes or tickers, such as [\"367\"] or [\"AMZN\"]."
 }

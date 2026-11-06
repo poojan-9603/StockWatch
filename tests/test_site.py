@@ -104,3 +104,25 @@ def test_picks_new_since_the_last_scored_day(tmp_path):
     assert f"New on Picks today: {first[0]['symbol']}." in [q["text"] for q in files["today"]["quiet"]]
     again = site.build(out)  # a rerun the same night keeps the same comparison
     assert [p["new_today"] for p in again["picks"]["picks"]] == [True] + [False] * (len(first) - 1)
+
+
+def test_leader_dip_watch_themes_strong_industries_and_odds(tmp_path):
+    out, bench = market(tmp_path, end="2026-10-29")
+    (out / "db").mkdir()
+    con = connect(out / "db" / "app.sqlite")
+    log = live.run(out, con, utc(2026, 10, 30, 1, 17), bench=bench)
+    f = out / "market" / "scores" / "leaders.parquet"
+    lead = pd.read_parquet(f)
+    assert len(lead) == 20 and lead["drawdown"].notna().all() and "leaders_down_20" in log  # 20 members, all leaders
+    assert set(lead.loc[lead["tech"], "sic"]) == {"3570"}
+    pd.DataFrame({"cik": [1000, 1001, 1003, 1005], "strong": [False, True, False, False],
+                  "tech": [True, False, False, True], "drawdown": [-0.25, -0.21, -0.40, -0.15],
+                  "drawdown_prev": [-0.10, -0.22, -0.40, -0.10], "sic": ["3570", "3580", "3600", "3570"]}).to_parquet(f)
+    files = site.build(out)
+    d = files["picks"]["dips"]
+    # 1003 is down 40% but in no theme and no strong industry; 1005 is in a theme but only 15% down
+    assert [x["symbol"] for x in d] == ["S00", "S01"] and [x["below_high_pct"] for x in d] == [25.0, 21.0]
+    assert d[0]["new_today"] and not d[1]["new_today"]  # S01 was already 22% down the day before
+    assert d[0]["why"].startswith("Theme: computers") and "big tech leaders" in d[0]["history"]
+    assert "strongest third" in d[1]["why"] and "coin flip" in d[1]["history"]
+    assert any("S00 (25%)" in q["text"] and "S01" not in q["text"] for q in files["today"]["quiet"])

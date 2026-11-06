@@ -36,7 +36,26 @@
         "then": {"properties": {"horizon": {"type": "string"}, "review_date": {"type": "string"}, "size_pct": {"type": "number"}}},
         "else": {"properties": {"size_pct": {"type": "null"}}}
       }
+    },
+    "dips": {
+      "description": "The leader-dip watch: big leaders in a strong industry or a theme, 20% or more below their 1-year high. A heads-up with what history showed, not a verdict.",
+      "type": "array",
+      "items": {
+        "title": "LeaderDip",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "symbol": {"$ref": "common.schema.json#/$defs/symbol"},
+          "cik": {"$ref": "common.schema.json#/$defs/cik"},
+          "name": {"$ref": "common.schema.json#/$defs/text"},
+          "below_high_pct": {"description": "Percent below the 1-year high (total return).", "type": "number", "minimum": 0, "maximum": 100},
+          "new_today": {"description": "Crossed the line since the trading day before.", "type": "boolean"},
+          "why": {"description": "Why it's watched: its theme or its industry's strength.", "$ref": "common.schema.json#/$defs/text"},
+          "history": {"description": "What the 2013 to 2019 study measured for dips like this.", "$ref": "common.schema.json#/$defs/text"}
+        },
+        "required": ["symbol", "cik", "name", "below_high_pct", "new_today", "why", "history"]
+      }
     }
   },
-  "required": ["generated_at", "as_of", "market_bad_mood", "decided", "picks"]
+  "required": ["generated_at", "as_of", "market_bad_mood", "decided", "picks", "dips"]
 }

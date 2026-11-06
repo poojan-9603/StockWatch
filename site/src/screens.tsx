@@ -111,6 +111,20 @@ export function PicksScreen() {
                 {x.flags.map((f) => <p className="small flag" key={f}>{f}</p>)}
               </Card>
             ))}
+            <h2>Big leaders down from their high</h2>
+            <p className="small">
+              The 100 biggest S&amp;P 500 companies, if they're in one of your themes or a strong industry and 20% or more
+              below their 1-year high. A heads-up, not a buy signal: in 2013 to 2019 a dip on its own didn't beat the
+              market (docs/DIPS.md), and 2020 on isn't tested.
+            </p>
+            {p.dips.length === 0 && <p className="small">None today.</p>}
+            {p.dips.map((x) => (
+              <section className="card" key={x.cik}>
+                <h3>{`${x.new_today ? "New: " : ""}${x.symbol} ${x.name}, ${x.below_high_pct.toFixed(0)}% below its high`}</h3>
+                <p className="small">{x.why}</p>
+                <p className="small">{x.history}</p>
+              </section>
+            ))}
             <Stamp d={p} />
           </>
         );
