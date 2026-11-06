@@ -28,9 +28,10 @@
           "horizon": {"description": "Expected horizon from signal decay, for example 3 to 6 months.", "type": ["string", "null"]},
           "review_date": {"anyOf": [{"$ref": "common.schema.json#/$defs/date"}, {"type": "null"}]},
           "size_pct": {"description": "Suggested size, percent of managed money.", "type": ["number", "null"], "minimum": 0, "maximum": 15},
+          "new_today": {"description": "Not on the list the last scored day before this one.", "type": "boolean"},
           "flags": {"description": "Reminders such as a hidden twin or the sector cap.", "type": "array", "items": {"$ref": "common.schema.json#/$defs/text"}}
         },
-        "required": ["symbol", "cik", "name", "sector", "verdict", "small_cap", "catalyst", "math", "panel", "horizon", "review_date", "size_pct", "flags"],
+        "required": ["symbol", "cik", "name", "sector", "verdict", "small_cap", "catalyst", "math", "panel", "horizon", "review_date", "size_pct", "new_today", "flags"],
         "if": {"properties": {"verdict": {"const": "Buy"}}},
         "then": {"properties": {"horizon": {"type": "string"}, "review_date": {"type": "string"}, "size_pct": {"type": "number"}}},
         "else": {"properties": {"size_pct": {"type": "null"}}}

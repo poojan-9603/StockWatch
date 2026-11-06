@@ -32,7 +32,7 @@ TIER = {"informational": "info", "important": "important", "urgent": "urgent"}
 SIGNAL_NAMES = {"momentum": "momentum", "quality": "quality", "value": "value", "low_volatility": "low volatility",
                 "earnings_surprise": "earnings surprise", "issuance": "issuance", "asset_growth": "asset growth"}
 CAP_PCT = 100 * min(bt.FROZEN["cap"], bt.FROZEN["cap_x"] * bt.FROZEN["avg"])
-PICKS = 10
+PICKS = 20
 
 
 def now_ts():
@@ -169,26 +169,31 @@ def build(out, blocked=None):
                          if nav else 0.0,
                          "drawdown_pct": round(dd, 2), "drawdown_alarm": dd >= 20, "holdings": hold_items}
 
-    # picks: the last month-end's paper buys, then the best-scored stocks passing the rule, not held
-    picks = []
-    for v in (v for v in verdicts if v["date"] == last_decision and v["verdict"] == "Buy"):
-        picks.append((v["cik"], "Buy", v["gates"].get("size_pct")))
-    ok = sc[(sc["score"] >= bar) & (sc["n60"] >= bt.FROZEN["n60"]) & ~sc["cik"].isin(list(held))]
-    for c in ok.nlargest(PICKS, "score")["cik"]:
-        if int(c) not in {x[0] for x in picks}:
-            picks.append((int(c), "Wait", None))
+    # picks, every night (PLAN, changes 2026-11-05): the best-scored stocks not held that pass the buy rule today,
+    # sized as the design sizes a buy, the ones new since the last scored day marked. The paper book still decides
+    # only at the month-end close.
+    ok = sc[(sc["score"] >= bar) & (sc["n60"] >= bt.FROZEN["n60"]) & ~sc["cik"].isin(list(held))
+            & sc["symbol"].map(lambda s: symbol_or_none(s) is not None)]
+    top = [int(c) for c in ok.nlargest(PICKS, "score")["cik"]]
+    seen_f = m / "paper" / "picks_seen.json"
+    seen = json.loads(seen_f.read_text()) if seen_f.exists() else {}
+    if seen.get("day") != day:  # a rerun or a blocked night keeps the last comparison
+        seen = {"day": day, "ciks": top, "prev_day": seen.get("day"), "prev": seen.get("ciks")}
+        seen_f.write_text(json.dumps(seen))
+    prev = None if seen.get("prev") is None else set(seen["prev"])
+    med_vol = sc["vol"].median()
     pick_items = []
-    for c, verdict, size in picks:
-        r = rows.get(c)
-        if r is None or not symbol_or_none(r.get("symbol")):
-            continue
-        mb = math_block(r, bar, mkt["bad_mood"], True)
-        if verdict == "Wait":
-            mb["reasons"].append("Decisions are made at the month-end close (the frozen design rebalances monthly).")
+    for c in top:
+        r = rows[c]
+        size = bt.FROZEN["avg"] * (med_vol / r["vol"] if pd.notna(r.get("vol")) and r["vol"] > 0 else 1.0)
+        size *= bt.FROZEN["soft_size"] if mkt["bad_mood"] else 1.0
+        size = min(max(size, bt.FROZEN["min_w"]), CAP_PCT / 100)
         pick_items.append({"symbol": r["symbol"], "cik": c, "name": text_or(r.get("name"), r["symbol"]),
-                           "sector": text_or(r.get("sector"), "Unknown"), "verdict": verdict, "small_cap": not r.get("sp500"),
-                           "catalyst": False, "math": mb, "panel": panels.get(c), "horizon": horizon(r),
-                           "review_date": review(day), "size_pct": size, "flags": []})
+                           "sector": text_or(r.get("sector"), "Unknown"), "verdict": "Buy", "small_cap": not r.get("sp500"),
+                           "catalyst": False, "math": math_block(r, bar, mkt["bad_mood"], True), "panel": panels.get(c),
+                           "horizon": horizon(r), "review_date": review(day), "size_pct": round(100 * size, 2),
+                           "new_today": prev is not None and c not in prev, "flags": []})
+    new_picks = [p["symbol"] for p in pick_items if p["new_today"]]
     files["picks"] = {"generated_at": gen, "as_of": day, "market_bad_mood": mkt["bad_mood"], "decided": last_decision,
                       "picks": pick_items}
 
@@ -212,6 +217,8 @@ def build(out, blocked=None):
         for v in verdicts if v["date"] >= recent and v["verdict"] in ("Buy", "Sell", "Trim")
         and symbol_or_none(v["symbol"])]
     quiet = [{"kind": "market", "text": mkt["note"], "outcome": None}]
+    if new_picks:
+        quiet.append({"kind": "change", "text": f"New on Picks today: {', '.join(new_picks)}.", "outcome": None})
     for p in sorted(positions, key=lambda x: -abs(x["day_change_pct"]))[:5]:
         quiet.append({"kind": "holding", "text": f"{p['symbol']} {p['day_change_pct']:+.1f}% today, "
                                                  f"{p['return_pct']:+.1f}% since bought.", "outcome": None})

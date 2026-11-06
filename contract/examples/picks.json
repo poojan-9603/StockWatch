@@ -65,6 +65,7 @@
    "horizon": "3 to 9 months (momentum-led)",
    "review_date": "2027-01-25",
    "size_pct": 6.5,
+   "new_today": false,
    "flags": []
   },
   {
@@ -111,6 +112,7 @@
    "horizon": null,
    "review_date": null,
    "size_pct": null,
+   "new_today": false,
    "flags": []
   },
   {
@@ -173,6 +175,7 @@
    "horizon": null,
    "review_date": null,
    "size_pct": null,
+   "new_today": false,
    "flags": [
     "Hidden twin: correlation 0.83 with CCC."
    ]

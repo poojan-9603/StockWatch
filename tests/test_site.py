@@ -1,5 +1,5 @@
 """The site's data files from a synthetic market run through live scoring: every file passes the contract, the paper
-book shows as holdings, the month-end buys show as picks and actions, and app alerts show on Today."""
+book shows as holdings, the month-end buys show as actions, today's buys (not held) as picks, and app alerts show on Today."""
 import json
 from datetime import datetime, timezone
 
@@ -36,8 +36,6 @@ def test_every_file_passes_the_contract_and_shows_the_paper_book(tmp_path):
     (out / "logs" / "actions.json").write_text(json.dumps([
         {"workflowName": "nightly", "event": "schedule", "status": "completed", "conclusion": "failure",
          "createdAt": f"{site.now_ts()[:10]}T00:00:00Z", "url": "u"}]))
-    sc = out / "market" / "scores" / "latest.parquet"
-    pd.read_parquet(sc).assign(sector=float("nan")).to_parquet(sc)  # no sector known: NaN, as on 2026-10-31
     files = site.build(out)
     data = out / "site" / "data"
     assert {p.relative_to(data).as_posix() for p in data.rglob("*.json")} >= {
@@ -49,8 +47,10 @@ def test_every_file_passes_the_contract_and_shows_the_paper_book(tmp_path):
     first = h["holdings"][0]
     assert (data / "holding" / f"{first['cik']}.json").exists()
     assert files[f"holding/{first['cik']}"]["prices"] and files[f"holding/{first['cik']}"]["why_bought"]["score"]
-    assert any(p["verdict"] == "Buy" for p in files["picks"]["picks"])
-    assert {p["sector"] for p in files["picks"]["picks"]} == {"Unknown"}
+    picks = files["picks"]["picks"]
+    held = {x["cik"] for x in h["holdings"]}
+    assert all(p["verdict"] == "Buy" and p["size_pct"] > 0 for p in picks)  # today's buys, sized
+    assert not {p["cik"] for p in picks} & held  # owned stocks are on Holdings, not Picks
     assert files["picks"]["decided"] == "2026-10-30"  # the month-end the Buys come from, shown on the page
     assert files["today"]["alerts"][0]["title"] == "Test alert"
     assert files["today"]["status"] == "quiet"  # the Oct 30 decisions are more than 3 days old by Nov 4
@@ -72,7 +72,7 @@ def test_before_the_first_month_end_and_on_a_blocked_day(tmp_path):
     files = site.build(out, blocked="only 80% of index stocks priced")
     assert files["holdings"]["holdings"] == [] and files["today"]["status"] == "blocked"
     assert any("starts at the first month-end" in q["text"] for q in files["today"]["quiet"])
-    assert all(p["verdict"] == "Wait" for p in files["picks"]["picks"])
+    assert all(p["verdict"] == "Buy" for p in files["picks"]["picks"])  # daily picks, before any month-end too
     health = json.loads((out / "site" / "data" / "health.json").read_text())
     assert health["status"] == "blocked" and "Not measured tonight" in health["checks"][-1]["detail"]
 
@@ -84,3 +84,23 @@ def test_a_blocked_day_right_after_month_end_shows_no_actions(tmp_path):
     live.run(out, con, utc(2026, 10, 31, 1, 17), bench=bench)  # the month-end Buys, then a blocked night (2026-11-03)
     files = site.build(out, blocked="only 0.0% of index stocks priced")
     assert files["today"]["status"] == "blocked" and files["today"]["actions"] == []
+
+
+def test_picks_new_since_the_last_scored_day(tmp_path):
+    out, bench = market(tmp_path)
+    (out / "db").mkdir()
+    con = connect(out / "db" / "app.sqlite")
+    live.run(out, con, utc(2026, 10, 31, 1, 17), bench=bench)
+    sc = out / "market" / "scores" / "latest.parquet"
+    pd.read_parquet(sc).assign(sector=float("nan")).to_parquet(sc)  # no sector known: NaN, as on 2026-10-31
+    first = site.build(out)["picks"]["picks"]
+    assert {p["sector"] for p in first} == {"Unknown"}
+    assert len(first) > 1 and not any(p["new_today"] for p in first)  # bought at the next open, so not held yet
+    seen = out / "market" / "paper" / "picks_seen.json"
+    s = json.loads(seen.read_text())
+    seen.write_text(json.dumps(s | {"day": "2026-10-29", "ciks": s["ciks"][1:]}))  # yesterday lacked the top pick
+    files = site.build(out)
+    assert [p["new_today"] for p in files["picks"]["picks"]] == [True] + [False] * (len(first) - 1)
+    assert f"New on Picks today: {first[0]['symbol']}." in [q["text"] for q in files["today"]["quiet"]]
+    again = site.build(out)  # a rerun the same night keeps the same comparison
+    assert [p["new_today"] for p in again["picks"]["picks"]] == [True] + [False] * (len(first) - 1)

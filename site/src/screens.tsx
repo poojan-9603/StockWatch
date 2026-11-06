@@ -80,24 +80,26 @@ export function PicksScreen() {
       {(p) => {
         const buys = p.picks.filter((x) => x.verdict === "Buy");
         const rest = p.picks.filter((x) => x.verdict !== "Buy");
-        const total = Math.round(buys.reduce((s, x) => s + (x.size_pct ?? 0), 0));
+        const fresh = buys.filter((x) => x.new_today).length;
+        const large = buys.filter((x) => !x.small_cap).length;
         return (
           <>
-            <h2>{buys.length ? `${buys.length} buy${buys.length === 1 ? "" : "s"} from the ${p.decided} month-end.` : "No buys this month."}</h2>
+            <h2>{buys.length ? `${buys.length} stock${buys.length === 1 ? "" : "s"} worth buying today.` : "Nothing passes the buy rule today."}</h2>
             <p className="small">
-              {buys.length > 0 && "The paper book bought these at the next open, so they're in Holdings now. "}
-              The design decides once a month, at the month-end close, so this list stays the same until the end of the
-              month. A stock that drops in between isn't re-checked for a buy until then.
+              Updated every night from that day's scores: the best-scored stocks you don't own that pass the buy rule
+              {buys.length > 0 && `. ${large} in the S&P 500, ${buys.length - large} smaller`}
+              {fresh > 0 && `. ${fresh} new since the last trading day`}. Stocks you own are in Holdings. Each size is
+              that stock's suggested share of managed money if you buy it; nobody buys the whole list.
             </p>
-            {p.market_bad_mood && <p className="small">Market mood is poor, so the buy bar is higher and sizes are smaller.</p>}
-            {total > 100 && (
-              <p className="small flag">
-                These sizes add up to {total}% of managed money, more than there is. The design buys the smallest first
-                and the last ones get whatever cash is left, so some fill partly or not at all.
+            {p.decided && (
+              <p className="small">
+                The paper book only buys at the month-end close (last on {p.decided}), then holds until a sell signal.
               </p>
             )}
+            {p.market_bad_mood && <p className="small">Market mood is poor, so the buy bar is higher and sizes are smaller.</p>}
             {[...buys, ...rest].map((x) => (
-              <Card key={x.cik} title={`${x.symbol} ${x.name}`} verdict={x.verdict} math={x.math} panel={x.panel}>
+              <Card key={x.cik} title={`${x.new_today ? "New: " : ""}${x.symbol} ${x.name}`} verdict={x.verdict}
+                math={x.math} panel={x.panel}>
                 <p className="small">
                   {x.sector}
                   {x.size_pct !== null && `. Size ${x.size_pct}% of managed money`}
