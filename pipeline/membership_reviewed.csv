@@ -72,3 +72,7 @@ date,side,kind,tickers,company,period,suggestion,confidence,why
 2024-07-08,ours_only,remove,WRK,WRKCo Inc.,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
 2025-08-08,ours_only,add,PSKY,Skydance Corp,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
 2025-08-08,ours_only,remove,"CBS,PARA,VIAC",Paramount Global,test/live 2020+,keep fja,high,Real index change that Wikipedia's table doesn't list
+2016-04-08,wikipedia_same_company,add,UA.C,Under Armour (Class C),tuning 2010-2019,no change,high,"Share class or ticker change; the company stays in the index. Wikipedia relabeled the reviewed UA row as UA.C (seen 2026-11-07)"
+2019-03-19,ours_only,remove,"FOX,FOXA","TWENTY-FIRST CENTURY FOX, INC.",tuning 2010-2019,keep fja,high,"Disney's 21st Century Fox deal: the old company left as the new Fox Corp took FOX/FOXA. Wikipedia now lists the exit a day later under TFCF/TFCFA (seen 2026-11-07); same company, one day"
+2019-03-20,wikipedia_only,remove,TFCFA,21st Century Fox,tuning 2010-2019,no change,high,"The same exit as fja's 2019-03-19 FOX,FOXA removal, relabeled by Wikipedia with the old company's last-day ticker (seen 2026-11-07)"
+2019-03-20,wikipedia_only,remove,TFCF,21st Century Fox,tuning 2010-2019,no change,high,"The same exit as fja's 2019-03-19 FOX,FOXA removal, relabeled by Wikipedia with the old company's last-day ticker (seen 2026-11-07)"
