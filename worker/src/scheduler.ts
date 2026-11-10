@@ -24,6 +24,29 @@ export function due(t: Date): string[] {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const HEADERS = (env: Env) => ({
+  authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: "application/vnd.github+json",
+  "user-agent": "stockwatch-scheduler", "x-github-api-version": "2022-11-28",
+});
+
+async function get(env: Env, path: string) {
+  const r = await fetch(`https://api.github.com/repos/${env.REPO}/${path}`, { headers: HEADERS(env) });
+  if (!r.ok) throw new Error(`GET ${path}: HTTP ${r.status}`);
+  return r.json() as Promise<any>;
+}
+
+// GitHub sometimes accepts a start and never runs it: on 2026-11-09 a watch run got no job and no log (docs/M7.md).
+// One and two hours after each job was due, check that a run of it started since then, and start it again if not.
+// The hourly watch is left out (the next hour runs anyway); a nightly retried at 04:17 or 05:17 still uses full closes.
+export async function missed(env: Env, job: string, since: Date): Promise<boolean> {
+  const { workflow_runs: runs } = await get(env,
+    `actions/workflows/${job}.yml/runs?per_page=5&created=${encodeURIComponent(">=" + since.toISOString())}`);
+  if (!runs.length) return true; // the start never became a run
+  const last = runs[0]; // newest first: a retry that did start counts
+  if (last.status !== "completed" || !["failure", "startup_failure"].includes(last.conclusion)) return false;
+  return (await get(env, `actions/runs/${last.id}/jobs`)).total_count === 0; // failed without ever running a job
+}
+
 // Three tries per job, then a thrown error, which marks the cron run failed in Cloudflare's log. A night that still
 // doesn't run shows up on Health as a missing night (monitor/failures.py).
 export async function dispatch(env: Env, job: string, pause = 5000) {
@@ -33,10 +56,7 @@ export async function dispatch(env: Env, job: string, pause = 5000) {
     try {
       const r = await fetch(`https://api.github.com/repos/${env.REPO}/actions/workflows/${job}.yml/dispatches`, {
         method: "POST",
-        headers: {
-          authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: "application/vnd.github+json",
-          "user-agent": "stockwatch-scheduler", "x-github-api-version": "2022-11-28",
-        },
+        headers: HEADERS(env),
         body: JSON.stringify({ ref: "main", inputs: { by: "cron" } }),
       });
       if (r.ok) return;
@@ -51,15 +71,27 @@ export async function dispatch(env: Env, job: string, pause = 5000) {
 
 export default {
   async scheduled(event: { scheduledTime: number }, env: Env): Promise<void> {
-    const jobs = due(new Date(event.scheduledTime));
+    const t = event.scheduledTime;
     const failed: string[] = [];
-    for (const job of jobs) {
+    const start = async (job: string, why: string) => {
       try {
         await dispatch(env, job);
-        console.log(`started ${job}`);
+        console.log(`started ${job}${why}`);
       } catch (e) {
         console.error(String(e));
         failed.push(String(e));
+      }
+    };
+    for (const job of due(new Date(t))) await start(job, "");
+    for (const back of [1, 2]) {
+      const then = new Date(t - back * 3600_000);
+      for (const job of due(then).filter((j) => j !== "watch")) {
+        try {
+          if (await missed(env, job, then)) await start(job, `: GitHub never ran the ${then.toISOString()} start`);
+        } catch (e) {
+          console.error(`${job} check: ${e}`);
+          failed.push(`${job} check: ${e}`);
+        }
       }
     }
     if (failed.length) throw new Error(failed.join("; "));
