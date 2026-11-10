@@ -30,8 +30,9 @@ from quant.pit import as_of, first_available
 
 SHORTLIST = 10
 DOC_DAYS, MAX_8KS = 120, 3
-# dollars: $2 a week keeps a five-Sunday month under the plan's $10 cap. Sunday 2026-11-01 cost $0.091 a stock (30 stocks).
-WEEK_BUDGET, MONTH_CAP, WORST_PER_STOCK = 2.00, 10.00, 0.09
+# dollars: $2 a week keeps a five-Sunday month under the plan's $10 cap. Measured $0.091 a stock on 2026-11-01 (30 stocks)
+# and $0.093 on 2026-11-08 (22 stocks, $2.05), so $0.10 leaves room: 20 stocks a week.
+WEEK_BUDGET, MONTH_CAP, WORST_PER_STOCK = 2.00, 10.00, 0.10
 FIGURES = {"revenue": REVENUE, "cost of revenue": COST, "net income": ["NetIncomeLoss"],
            "operating income": ["OperatingIncomeLoss"], "total assets": ["Assets"],
            "stockholders' equity": ["StockholdersEquity"]}
